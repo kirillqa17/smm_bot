@@ -1,0 +1,99 @@
+═══════════════════════════════════════════════════════════
+  🤖 SMM BOT - БЫСТРЫЙ СТАРТ
+═══════════════════════════════════════════════════════════
+
+⚡ ШАГ 1: ПОЛУЧИТЬ API КЛЮЧИ (5 минут)
+
+1️⃣ Telegram Bot Token:
+   - Откройте: https://t.me/BotFather
+   - Команда: /newbot
+   - Скопируйте токен
+
+2️⃣ Telegram API ID/Hash:
+   - Откройте: https://my.telegram.org
+   - API Development Tools
+   - Создайте приложение
+   - Скопируйте api_id и api_hash
+
+3️⃣ Google Gemini API:
+   - Откройте: https://makersuite.google.com/app/apikey
+   - Create API Key
+   - Скопируйте ключ
+
+═══════════════════════════════════════════════════════════
+
+⚡ ШАГ 2: НАСТРОИТЬ ОКРУЖЕНИЕ (2 минуты)
+
+1. Скопируйте файл настроек:
+   cp .env.example .env
+
+2. Откройте .env:
+   nano .env
+
+3. Вставьте ваши ключи:
+   BOT_TOKEN=ваш_токен
+   API_ID=ваш_api_id
+   API_HASH=ваш_api_hash
+   GEMINI_API_KEY=ваш_gemini_ключ
+   DB_PASSWORD=любой_пароль
+
+4. Сохраните: Ctrl+X → Y → Enter
+
+═══════════════════════════════════════════════════════════
+
+⚡ ШАГ 3: ЗАПУСТИТЬ БОТ
+
+ВАРИАНТ А: Docker (рекомендуется)
+   docker-compose up -d
+
+ВАРИАНТ Б: Вручную
+   ./start.sh
+
+═══════════════════════════════════════════════════════════
+
+⚡ ШАГ 4: ПРОВЕРИТЬ
+
+1. Откройте бота в Telegram
+2. Отправьте: /start
+3. Готово! 🎉
+
+═══════════════════════════════════════════════════════════
+
+📌 ЧТО ДАЛЬШЕ?
+
+✅ Базовые функции (БЕСПЛАТНО):
+   • Анализ каналов
+   • Генерация постов
+   • Новости → Посты
+
+💎 Продвинутые функции (опционально):
+   • Генерация изображений → Нужен OPENAI_API_KEY
+   • Редактирование AI → Нужен REPLICATE_API_KEY
+   • Больше новостей → Нужен NEWS_API_KEY
+
+═══════════════════════════════════════════════════════════
+
+🔧 РЕШЕНИЕ ПРОБЛЕМ
+
+Бот не запускается?
+→ python -c "from core.config import validate_config; validate_config()"
+
+Redis не работает?
+→ sudo systemctl start redis
+
+PostgreSQL не работает?
+→ sudo systemctl start postgresql
+→ sudo -u postgres psql < init_db.sql
+
+Telethon не авторизован?
+→ python -c "from telethon.sync import TelegramClient; from core.config import API_ID, API_HASH, SESSION_NAME; TelegramClient(SESSION_NAME, API_ID, API_HASH).start()"
+
+═══════════════════════════════════════════════════════════
+
+📚 ПОЛНАЯ ДОКУМЕНТАЦИЯ: README.md
+
+💬 ПОДДЕРЖКА: Читайте README.md раздел "Troubleshooting"
+
+═══════════════════════════════════════════════════════════
+
+ГОТОВО! Бот настроен и работает! 🚀
