@@ -175,7 +175,7 @@ def analyze_channel_task(channel_url: str) -> Dict:
             )
         )
 
-        style_json = json.loads(response.text)
+        style_json = json.loads(response.text)[0]
         style_json.update(metrics)
 
         return {"success": True, "style": style_json, "channel_title": channel_title}
@@ -193,15 +193,15 @@ def generate_posts_task(style_summary: Dict, topic: str) -> Dict:
     """Generate post variations with DEEP style matching - ASYNC"""
     try:
         # Extract metrics
-        avg_words = style_summary.get("average_word_count", 100)
-        avg_sentences = style_summary.get("average_sentence_count", 5)
-        avg_lines = style_summary.get("average_line_count", 5)
-        avg_emojis = style_summary.get("average_emoji_count", 0)
-        avg_bolds = style_summary.get("average_bold_usage", 0)
-        avg_italics = style_summary.get("average_italic_usage", 0)
-        avg_questions = style_summary.get("average_question_marks", 0)
-        avg_exclamations = style_summary.get("average_exclamation_marks", 0)
-        avg_hashtags = style_summary.get("average_hashtags", 0)
+        avg_words = style_summary.get("average_word_count")
+        avg_sentences = style_summary.get("average_sentence_count")
+        avg_lines = style_summary.get("average_line_count")
+        avg_emojis = style_summary.get("average_emoji_count")
+        avg_bolds = style_summary.get("average_bold_usage")
+        avg_italics = style_summary.get("average_italic_usage")
+        avg_questions = style_summary.get("average_question_marks")
+        avg_exclamations = style_summary.get("average_exclamation_marks")
+        avg_hashtags = style_summary.get("average_hashtags")
 
         prompt = f"""Ты - автор Telegram канала. Тебе нужно написать 3 РАЗНЫХ варианта поста на тему: "{topic}"
 
@@ -214,10 +214,10 @@ def generate_posts_task(style_summary: Dict, topic: str) -> Dict:
 ═══ СТРОГИЕ ТРЕБОВАНИЯ ═══
 
 МЕТРИКИ (соблюдай точно!):
-• Слов: {avg_words} ±10%
-• Предложений: {avg_sentences} ±1
-• Строк/абзацев: {avg_lines} ±1
-• Эмодзи: {avg_emojis} ±1
+• Слов: {avg_words} ±20%
+• Предложений: {avg_sentences} ±3%
+• Строк/абзацев: {avg_lines} ±3%
+• Эмодзи: {avg_emojis} ±3%
 • Выделений жирным: ~{avg_bolds}
 • Выделений курсивом: ~{avg_italics}
 • Вопросительных знаков: ~{avg_questions}
