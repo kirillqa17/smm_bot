@@ -31,63 +31,38 @@ class Database:
             conn.close()
 
     @staticmethod
-    def add_user(user_id: int, username: str = None, first_name: str = None, language: str = 'en'):
+    def add_user(user_id: int, username: str = None, first_name: str = None):
         """Add or update user"""
         with Database.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO users (id, username, first_name, language, last_active)
-                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO users (id, username, first_name, last_active)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (id) DO UPDATE
                     SET username = EXCLUDED.username,
                         first_name = EXCLUDED.first_name,
                         last_active = CURRENT_TIMESTAMP
                     """,
-                    (user_id, username, first_name, language)
+                    (user_id, username, first_name)
                 )
 
     @staticmethod
-    def set_user_language(user_id: int, language: str):
-        """Set user language"""
-        with Database.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE users SET language = %s WHERE id = %s
-                    """,
-                    (language, user_id)
-                )
-
-    @staticmethod
-    def get_user_language(user_id: int) -> str:
-        """Get user language"""
-        with Database.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT language FROM users WHERE id = %s
-                    """,
-                    (user_id,)
-                )
-                result = cur.fetchone()
-                return result[0] if result else 'en'
-
-    @staticmethod
-    def save_channel_style(user_id: int, channel_url: str, style_summary: Dict) -> int:
+    def save_channel_style(user_id: int, channel_url: str, channel_title: str, style_summary: Dict) -> int:
         """Save channel style analysis"""
         with Database.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO channels (user_id, channel_url, style_summary, analyzed_at)
-                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO channels (user_id, channel_url, channel_title, style_summary, analyzed_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (user_id, channel_url) DO UPDATE
-                    SET style_summary = EXCLUDED.style_summary,
+                    SET channel_title = EXCLUDED.channel_title,
+                        style_summary = EXCLUDED.style_summary,
                         analyzed_at = CURRENT_TIMESTAMP
                     RETURNING id
                     """,
-                    (user_id, channel_url, Json(style_summary))
+                    (user_id, channel_url, channel_title, Json(style_summary))
                 )
                 return cur.fetchone()[0]
 
@@ -108,6 +83,42 @@ class Database:
                 )
                 result = cur.fetchone()
                 return dict(result['style_summary']) if result else None
+
+    @staticmethod
+    def get_user_channels(user_id: int) -> List[Dict]:
+        """Get all channels analyzed by user"""
+        with Database.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, channel_url, channel_title, analyzed_at
+                    FROM channels
+                    WHERE user_id = %s
+                    ORDER BY analyzed_at DESC
+                    """,
+                    (user_id,)
+                )
+                return [dict(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def get_channel_by_id(channel_id: int) -> Optional[Dict]:
+        """Get channel by ID"""
+        with Database.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, user_id, channel_url, channel_title, style_summary, analyzed_at
+                    FROM channels
+                    WHERE id = %s
+                    """,
+                    (channel_id,)
+                )
+                result = cur.fetchone()
+                if result:
+                    result_dict = dict(result)
+                    result_dict['style_summary'] = dict(result_dict['style_summary'])
+                    return result_dict
+                return None
 
     @staticmethod
     def save_post(user_id: int, content: str, channel_id: int = None) -> int:

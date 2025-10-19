@@ -1,7 +1,7 @@
 """Celery tasks for async operations"""
 from tasks.celery_app import celery_app
-from telethon.sync import TelegramClient
-from telethon.errors import ChannelInvalidError, ChannelPrivateError
+from pyrogram import Client
+from pyrogram.errors import UsernameNotOccupied, UsernameInvalid, ChannelPrivate
 import google.generativeai as genai
 from openai import OpenAI
 import replicate
@@ -19,8 +19,12 @@ from datetime import datetime, timedelta
 from core.config import (
     API_ID, API_HASH, SESSION_NAME, GEMINI_API_KEY,
     OPENAI_API_KEY, REPLICATE_API_KEY, NEWS_API_KEY,
-    MAX_POSTS_TO_ANALYZE
+    MAX_POSTS_TO_ANALYZE, BASE_DIR
 )
+
+# Ensure sessions directory exists
+import os
+os.makedirs(BASE_DIR / "sessions", exist_ok=True)
 
 
 # Initialize AI clients
@@ -37,108 +41,219 @@ if REPLICATE_API_KEY:
 
 @celery_app.task(name='analyze_channel')
 def analyze_channel_task(channel_url: str) -> Dict:
-    """Analyze Telegram channel style - ASYNC"""
+    """Analyze Telegram channel style with DEEP analysis - ASYNC"""
     try:
-        # Parse channel with Telethon
-        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-        client.connect()
+        # Parse channel with Pyrogram
+        channel_title = ""
+        with Client(SESSION_NAME, API_ID, API_HASH) as client:
+            # Get chat info
+            chat = client.get_chat(channel_url)
+            channel_title = chat.title
 
-        if not client.is_user_authorized():
-            return {"error": "Telethon not authorized"}
+            # Get messages from the channel
+            messages = []
+            for message in client.get_chat_history(chat.id, limit=MAX_POSTS_TO_ANALYZE):
+                messages.append(message)
 
-        entity = client.get_entity(channel_url)
-        messages = client.get_messages(entity, limit=MAX_POSTS_TO_ANALYZE)
+            posts_data = []
+            for msg in messages:
+                if msg.text:
+                    emoji_count = len(re.findall(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001FAFF\U00002702-\U000027B0]', msg.text))
 
-        posts_data = []
-        for msg in messages:
-            if msg.text:
-                emoji_count = len(re.findall(r'[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001FAFF\U00002702-\U000027B0]', msg.text))
-                posts_data.append({
-                    "text": msg.text,
-                    "emoji_count": emoji_count
-                })
+                    # Deep metrics per post
+                    words = msg.text.split()
+                    sentences = [s.strip() for s in re.split(r'[.!?]+', msg.text) if s.strip()]
+                    lines = [l.strip() for l in msg.text.split('\n') if l.strip()]
 
-        client.disconnect()
+                    # Formatting analysis
+                    bold_count = msg.text.count('<b>') + msg.text.count('**')
+                    italic_count = msg.text.count('<i>') + msg.text.count('_')
+                    code_count = msg.text.count('<code>') + msg.text.count('`')
+                    link_count = msg.text.count('http')
+
+                    # Punctuation analysis
+                    question_marks = msg.text.count('?')
+                    exclamation_marks = msg.text.count('!')
+                    hashtags = len(re.findall(r'#\w+', msg.text))
+
+                    posts_data.append({
+                        "text": msg.text,
+                        "word_count": len(words),
+                        "sentence_count": len(sentences),
+                        "line_count": len(lines),
+                        "emoji_count": emoji_count,
+                        "bold_count": bold_count,
+                        "italic_count": italic_count,
+                        "code_count": code_count,
+                        "link_count": link_count,
+                        "question_marks": question_marks,
+                        "exclamation_marks": exclamation_marks,
+                        "hashtags": hashtags,
+                        "avg_word_length": round(sum(len(w) for w in words) / len(words)) if words else 0,
+                        "has_cta": any(word in msg.text.lower() for word in ['подпишись', 'жми', 'переходи', 'смотри', 'читай', 'узнай'])
+                    })
 
         if not posts_data:
-            return {"error": "No text posts found"}
+            return {"error": "Текстовые посты не найдены"}
 
-        # Calculate metrics
-        total_words = sum(len(p['text'].split()) for p in posts_data)
-        total_sentences = sum(len(re.split(r'[.!?]+', p['text'])) for p in posts_data)
-        total_emojis = sum(p['emoji_count'] for p in posts_data)
         num_posts = len(posts_data)
 
+        # Calculate detailed metrics
         metrics = {
-            "average_word_count": round(total_words / num_posts),
-            "average_sentence_count": round(total_sentences / num_posts),
-            "average_emoji_count": round(total_emojis / num_posts),
+            "channel_title": channel_title,
+            "analyzed_posts_count": num_posts,
+            "average_word_count": round(sum(p['word_count'] for p in posts_data) / num_posts),
+            "average_sentence_count": round(sum(p['sentence_count'] for p in posts_data) / num_posts),
+            "average_line_count": round(sum(p['line_count'] for p in posts_data) / num_posts),
+            "average_emoji_count": round(sum(p['emoji_count'] for p in posts_data) / num_posts),
+            "average_bold_usage": round(sum(p['bold_count'] for p in posts_data) / num_posts, 1),
+            "average_italic_usage": round(sum(p['italic_count'] for p in posts_data) / num_posts, 1),
+            "average_code_usage": round(sum(p['code_count'] for p in posts_data) / num_posts, 1),
+            "average_link_count": round(sum(p['link_count'] for p in posts_data) / num_posts, 1),
+            "average_question_marks": round(sum(p['question_marks'] for p in posts_data) / num_posts, 1),
+            "average_exclamation_marks": round(sum(p['exclamation_marks'] for p in posts_data) / num_posts, 1),
+            "average_hashtags": round(sum(p['hashtags'] for p in posts_data) / num_posts, 1),
+            "average_word_length": round(sum(p['avg_word_length'] for p in posts_data) / num_posts),
+            "cta_frequency": round(sum(1 for p in posts_data if p['has_cta']) / num_posts * 100),
         }
 
-        # Analyze style with Gemini
-        posts_text = "\n\n---POST---\n\n".join([p['text'] for p in posts_data[:20]])  # Limit for API
+        # Deep AI analysis with Gemini - take all posts for analysis
+        posts_text = "\n\n═══ ПОСТ ═══\n\n".join([p['text'] for p in posts_data[:30]])
 
-        prompt = f"""Analyze these Telegram posts and describe the style in JSON format.
+        prompt = f"""Ты эксперт по анализу стиля письма в Telegram каналах. Проанализируй эти посты МАКСИМАЛЬНО ГЛУБОКО и верни детальное описание стиля в JSON.
 
-Posts:
+ПОСТЫ ДЛЯ АНАЛИЗА:
 {posts_text}
 
-Return JSON with these fields:
-- tone: overall tone (e.g., "expert", "casual", "humorous")
-- themes: array of 3-5 main themes
-- post_structure: typical structure description
-- formatting_usage: how formatting is used
-- call_to_action_frequency: how often CTAs appear
-- target_audience: who is the target audience
-- professionalism_level: level of professionalism"""
+ВЕРНИ JSON СО СЛЕДУЮЩИМИ ПОЛЯМИ:
+
+1. "tone" - общий тон (например: "экспертный", "дружеский", "юмористический", "мотивационный", "информативный", "провокационный")
+
+2. "writing_style" - стиль написания:
+   - "vocabulary_level": уровень лексики (простая/средняя/сложная)
+   - "sentence_structure": структура предложений (короткие/длинные/смешанные)
+   - "paragraph_style": стиль абзацев (одно предложение/несколько/длинные блоки)
+
+3. "content_patterns" - паттерны контента:
+   - "opening_style": как автор начинает посты (вопрос/утверждение/история/факт)
+   - "closing_style": как автор заканчивает посты (вывод/CTA/вопрос/многоточие)
+   - "uses_stories": использует ли истории/примеры (да/нет)
+   - "uses_lists": использует ли списки/перечисления (да/нет)
+   - "uses_quotes": использует ли цитаты (да/нет)
+
+4. "linguistic_features" - лингвистические особенности:
+   - "uses_slang": использует ли сленг (да/нет)
+   - "uses_professional_terms": использует ли профессиональные термины (да/нет)
+   - "rhetorical_questions": частота риторических вопросов (часто/редко/никогда)
+   - "personal_pronouns": какие местоимения ("я"/"мы"/"ты"/"вы"/смешанные)
+
+5. "formatting_style" - стиль форматирования:
+   - "emoji_placement": где размещает эмодзи (начало/конец/везде/редко)
+   - "capitalization_pattern": паттерн заглавных букв (стандартно/все заглавные в заголовках/особый стиль)
+   - "spacing_style": стиль пробелов между блоками (плотно/разреженно)
+
+6. "engagement_tactics" - тактики вовлечения:
+   - "asks_questions": задает ли вопросы читателям (часто/редко/никогда)
+   - "direct_address": обращается ли напрямую к читателю (часто/редко/никогда)
+   - "creates_intrigue": создает ли интригу/саспенс (да/нет)
+
+7. "unique_markers" - уникальные маркеры стиля (массив из 3-5 отличительных особенностей, которые делают стиль узнаваемым)
+
+8. "themes" - основные темы (массив из 3-5 главных тем)
+
+9. "target_audience" - целевая аудитория (детальное описание)
+
+10. "author_personality" - личность автора (описание характера и подхода автора к написанию)
+
+ВАЖНО: Будь максимально детальным, это нужно для того чтобы сгенерировать посты НЕОТЛИЧИМЫЕ от оригинального автора!"""
 
         response = gemini_model.generate_content(
             contents=[{"role": "user", "parts": [{"text": prompt}]}],
             generation_config=genai.types.GenerationConfig(
                 response_mime_type="application/json",
+                temperature=0.3,  # Lower temperature for more consistent analysis
             )
         )
 
         style_json = json.loads(response.text)
         style_json.update(metrics)
 
-        return {"success": True, "style": style_json}
+        return {"success": True, "style": style_json, "channel_title": channel_title}
 
-    except (ChannelInvalidError, ValueError):
-        return {"error": "Invalid channel URL"}
-    except ChannelPrivateError:
-        return {"error": "Channel is private"}
+    except (UsernameNotOccupied, UsernameInvalid, ValueError):
+        return {"error": "Неверный URL канала"}
+    except ChannelPrivate:
+        return {"error": "Канал приватный"}
     except Exception as e:
-        return {"error": f"Analysis error: {str(e)}"}
+        return {"error": f"Ошибка анализа: {str(e)}"}
 
 
 @celery_app.task(name='generate_posts')
 def generate_posts_task(style_summary: Dict, topic: str) -> Dict:
-    """Generate post variations - ASYNC"""
+    """Generate post variations with DEEP style matching - ASYNC"""
     try:
+        # Extract metrics
         avg_words = style_summary.get("average_word_count", 100)
         avg_sentences = style_summary.get("average_sentence_count", 5)
+        avg_lines = style_summary.get("average_line_count", 5)
         avg_emojis = style_summary.get("average_emoji_count", 0)
+        avg_bolds = style_summary.get("average_bold_usage", 0)
+        avg_italics = style_summary.get("average_italic_usage", 0)
+        avg_questions = style_summary.get("average_question_marks", 0)
+        avg_exclamations = style_summary.get("average_exclamation_marks", 0)
+        avg_hashtags = style_summary.get("average_hashtags", 0)
 
-        style_clean = {k: v for k, v in style_summary.items()
-                       if k not in ['average_word_count', 'average_sentence_count', 'average_emoji_count']}
+        prompt = f"""Ты - автор Telegram канала. Тебе нужно написать 3 РАЗНЫХ варианта поста на тему: "{topic}"
 
-        prompt = f"""You are a Telegram channel author. Create 3 different post variations on the topic: "{topic}"
+КРИТИЧЕСКИ ВАЖНО: Посты должны быть АБСОЛЮТНО НЕОТЛИЧИМЫ от оригинального стиля автора! Читатель НЕ ДОЛЖЕН понять, что пост написан AI!
 
-Style guide:
-{json.dumps(style_clean, indent=2, ensure_ascii=False)}
+═══ ДЕТАЛЬНЫЙ АНАЛИЗ СТИЛЯ АВТОРА ═══
 
-Constraints:
-- Words: ~{avg_words}
-- Sentences: ~{avg_sentences}
-- Emojis: ~{avg_emojis}
+{json.dumps(style_summary, indent=2, ensure_ascii=False)}
 
-Write 3 complete, ready-to-publish posts.
-Use only Telegram HTML tags: <b>, <i>, <s>, <code>, <a href="">.
-Separate variants with "---VARIANT---"."""
+═══ СТРОГИЕ ТРЕБОВАНИЯ ═══
+
+МЕТРИКИ (соблюдай точно!):
+• Слов: {avg_words} ±10%
+• Предложений: {avg_sentences} ±1
+• Строк/абзацев: {avg_lines} ±1
+• Эмодзи: {avg_emojis} ±1
+• Выделений жирным: ~{avg_bolds}
+• Выделений курсивом: ~{avg_italics}
+• Вопросительных знаков: ~{avg_questions}
+• Восклицательных знаков: ~{avg_exclamations}
+• Хештегов: ~{avg_hashtags}
+
+СТИЛЬ НАПИСАНИЯ:
+1. Используй ТОЧНО такой же тон и манеру письма как в примерах
+2. Копируй структуру постов (как автор начинает, развивает мысль, заканчивает)
+3. Используй те же лингвистические особенности (слова, обороты, местоимения)
+4. Применяй те же тактики вовлечения
+5. Размещай эмодзи так же, как автор
+6. Соблюдай форматирование (жирный, курсив, пробелы между абзацами)
+
+УНИКАЛЬНЫЕ МАРКЕРЫ:
+Обязательно используй отличительные особенности стиля автора, чтобы пост был узнаваемым!
+
+ФОРМАТИРОВАНИЕ:
+• Используй ТОЛЬКО Telegram HTML теги: <b>, <i>, <s>, <code>, <a href="">
+• НЕ используй Markdown (**, __, ~~ и т.д.)
+• Размещай переносы строк как в оригинале
+
+РЕЗУЛЬТАТ:
+Напиши 3 ПОЛНЫХ, ГОТОВЫХ К ПУБЛИКАЦИИ поста.
+Каждый вариант должен быть УНИКАЛЬНЫМ, но в ОДНОМ СТИЛЕ.
+Разделяй варианты строкой "---VARIANT---"
+
+НАЧИНАЙ ПИСАТЬ ПОСТЫ:"""
 
         response = gemini_model.generate_content(
-            contents=[{"role": "user", "parts": [{"text": prompt}]}]
+            contents=[{"role": "user", "parts": [{"text": prompt}]}],
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.9,  # Higher temperature for more creative variations
+                top_p=0.95,
+                top_k=40,
+            )
         )
 
         variants = response.text.split("---VARIANT---")
@@ -147,7 +262,7 @@ Separate variants with "---VARIANT---"."""
         return {"success": True, "posts": clean_variants[:3]}
 
     except Exception as e:
-        return {"error": f"Generation error: {str(e)}"}
+        return {"error": f"Ошибка генерации: {str(e)}"}
 
 
 @celery_app.task(name='fetch_news')
@@ -195,7 +310,6 @@ def fetch_news_task(category: str = None, keywords: List[str] = None) -> Dict:
                     params={
                         "q": query,
                         "from": from_date,
-                        "language": "ru",
                         "sortBy": "publishedAt",
                         "apiKey": NEWS_API_KEY
                     },

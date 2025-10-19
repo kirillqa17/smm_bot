@@ -40,6 +40,20 @@ fi
 echo "✅ All dependencies OK"
 echo ""
 
+# Override Docker hostnames for local development
+export REDIS_HOST=localhost
+export DB_HOST=localhost
+
+echo "📝 Using local configuration:"
+echo "   Redis: $REDIS_HOST"
+echo "   PostgreSQL: $DB_HOST"
+echo ""
+
+# Kill any existing Celery workers
+echo "🧹 Cleaning up old processes..."
+pkill -f "celery.*tasks.celery_app" 2>/dev/null && echo "   Stopped old Celery workers" || echo "   No old workers found"
+sleep 1
+
 # Start Celery worker in background
 echo "🔧 Starting Celery worker..."
 celery -A tasks.celery_app worker --loglevel=info --logfile=celery.log &

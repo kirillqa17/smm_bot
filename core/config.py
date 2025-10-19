@@ -1,14 +1,19 @@
 """Configuration module"""
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Base directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Telegram
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_ID = int(os.getenv("API_ID", "0"))
 API_HASH = os.getenv("API_HASH")
-SESSION_NAME = os.getenv("SESSION_NAME", "sessions/smm_bot")
+# Convert to absolute path for Pyrogram
+SESSION_NAME = str(BASE_DIR / os.getenv("SESSION_NAME", "sessions/smm_bot"))
 
 # Database
 DB_HOST = os.getenv("DB_HOST", "localhost")

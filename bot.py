@@ -10,7 +10,6 @@ from io import BytesIO
 
 from core.config import BOT_TOKEN, validate_config
 from core.state_manager import state_manager
-from core.localization import get_text
 from db.database import db
 from tasks.celery_app import celery_app
 from tasks.tasks import (
@@ -45,26 +44,26 @@ STATES = {
 
 # ===== KEYBOARDS =====
 
-def main_menu_keyboard(lang='en'):
+def main_menu_keyboard():
     """Main menu keyboard"""
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     keyboard.add(
-        types.KeyboardButton(get_text(lang, 'analyze_channel')),
-        types.KeyboardButton(get_text(lang, 'generate_post')),
-        types.KeyboardButton(get_text(lang, 'news_to_post')),
-        types.KeyboardButton(get_text(lang, 'create_image')),
-        types.KeyboardButton(get_text(lang, 'edit_image')),
-        types.KeyboardButton(get_text(lang, 'watermark')),
-        types.KeyboardButton(get_text(lang, 'my_stats')),
-        types.KeyboardButton("❓ Help")
+        types.KeyboardButton("📊 Анализ канала"),
+        types.KeyboardButton("✍️ Создать пост"),
+        types.KeyboardButton("📰 Новости в пост"),
+        types.KeyboardButton("🎨 Создать картинку"),
+        types.KeyboardButton("✏️ Редактировать фото"),
+        types.KeyboardButton("💧 Водяной знак"),
+        types.KeyboardButton("📈 Моя статистика"),
+        types.KeyboardButton("❓ Помощь")
     )
     return keyboard
 
 
-def cancel_keyboard(lang='en'):
+def cancel_keyboard():
     """Cancel keyboard"""
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(types.KeyboardButton(get_text(lang, 'cancel')))
+    keyboard.add(types.KeyboardButton("❌ Отмена"))
     return keyboard
 
 
@@ -72,11 +71,11 @@ def news_category_keyboard():
     """News categories inline keyboard"""
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
-        types.InlineKeyboardButton("🖥 Tech", callback_data="news_tech"),
-        types.InlineKeyboardButton("💰 Crypto", callback_data="news_crypto"),
-        types.InlineKeyboardButton("📱 Marketing", callback_data="news_marketing"),
-        types.InlineKeyboardButton("💼 Business", callback_data="news_business"),
-        types.InlineKeyboardButton("🔍 Custom Search", callback_data="news_custom")
+        types.InlineKeyboardButton("🖥 Технологии", callback_data="news_tech"),
+        types.InlineKeyboardButton("💰 Криптовалюты", callback_data="news_crypto"),
+        types.InlineKeyboardButton("📱 Маркетинг", callback_data="news_marketing"),
+        types.InlineKeyboardButton("💼 Бизнес", callback_data="news_business"),
+        types.InlineKeyboardButton("🔍 Свой запрос", callback_data="news_custom")
     )
     return keyboard
 
@@ -104,31 +103,16 @@ def start_handler(message):
     state_manager.clear_state(user_id)
     state_manager.clear_user_data(user_id)
 
-    # Check if user already has language set
-    user_lang = db.get_user_language(user_id)
+    # Add user to database
+    db.add_user(user_id, username, first_name)
 
-    if not user_lang or user_lang == 'en':
-        # Show language selection
-        markup = types.InlineKeyboardMarkup()
-        markup.row(
-            types.InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-            types.InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")
-        )
-        bot.send_message(
-            message.chat.id,
-            "👋 <b>Welcome to SMM Bot!</b>\n\nPlease select your language:\nПожалуйста, выберите язык:",
-            reply_markup=markup
-        )
-    else:
-        # User already has language, show main menu
-        db.add_user(user_id, username, first_name, user_lang)
-        show_main_menu(message, user_lang)
+    # Show main menu
+    show_main_menu(message)
 
 
-def show_main_menu(message, lang='en'):
-    """Show main menu with selected language"""
-    if lang == 'ru':
-        welcome_text = """👋 <b>Добро пожаловать в SMM Bot!</b>
+def show_main_menu(message):
+    """Show main menu"""
+    welcome_text = """👋 <b>Добро пожаловать в SMM Bot!</b>
 
 Я ваш AI-ассистент для создания контента в социальных сетях.
 
@@ -141,70 +125,56 @@ def show_main_menu(message, lang='en'):
 💧 Добавлять/удалять водяные знаки
 
 Выберите опцию из меню ниже или введите /help для подробной информации."""
-    else:
-        welcome_text = """👋 <b>Welcome to SMM Bot!</b>
-
-I'm your AI-powered assistant for social media content creation.
-
-<b>What I can do:</b>
-📊 Analyze Telegram channels' style
-✍️ Generate posts in any style
-📰 Create posts from latest news
-🎨 Generate AI images (DALL-E 3)
-✏️ Edit images with AI
-💧 Add/remove watermarks
-
-Choose an option from the menu below or type /help for more info."""
 
     bot.send_message(
         message.chat.id,
         welcome_text,
-        reply_markup=main_menu_keyboard(lang)
+        reply_markup=main_menu_keyboard()
     )
 
 
 @bot.message_handler(commands=['help'])
 def help_handler(message):
     """Help command handler"""
-    help_text = """<b>📚 SMM Bot Help</b>
+    help_text = """<b>📚 Справка по SMM Bot</b>
 
-<b>Main Features:</b>
+<b>Основные функции:</b>
 
-📊 <b>Analyze Channel</b>
-Analyze any Telegram channel's writing style, tone, and structure.
-Just provide the channel username (@channel).
+📊 <b>Анализ канала</b>
+Анализ стиля, тона и структуры любого Telegram канала.
+Просто укажите username канала (@канал).
 
-✍️ <b>Generate Post</b>
-Create posts in your channel's style.
-First analyze a channel, then generate posts on any topic.
+✍️ <b>Создать пост</b>
+Создание постов в стиле вашего канала.
+Сначала проанализируйте канал, затем генерируйте посты на любую тему.
 
-📰 <b>News to Post</b>
-Find latest news and automatically generate posts about them.
-Categories: Tech, Crypto, Marketing, Business
+📰 <b>Новости в пост</b>
+Поиск последних новостей и автоматическая генерация постов.
+Категории: Tech, Crypto, Marketing, Business
 
-🎨 <b>Create Image</b>
-Generate unique images with AI (DALL-E 3).
-Just describe what you want to see.
+🎨 <b>Создать картинку</b>
+Генерация уникальных изображений с помощью AI (DALL-E 3).
+Просто опишите, что хотите увидеть.
 
-✏️ <b>Edit Image</b>
-Edit images using AI instructions:
-- Add text or logos
-- Change colors/background
-- Apply effects
-- Remove watermarks
+✏️ <b>Редактировать фото</b>
+Редактирование изображений с помощью AI:
+- Добавление текста или логотипов
+- Изменение цветов/фона
+- Применение эффектов
+- Удаление водяных знаков
 
-💧 <b>Watermark</b>
-Add watermark text to your images.
+💧 <b>Водяной знак</b>
+Добавление текста-водяного знака на изображения.
 
-📈 <b>My Stats</b>
-View your usage statistics.
+📈 <b>Моя статистика</b>
+Просмотр статистики использования.
 
-<b>Quick Tips:</b>
-• All tasks run asynchronously - no waiting!
-• You can cancel any operation with ❌ Cancel
-• Images are optimized for Telegram
+<b>Полезные советы:</b>
+• Все задачи выполняются асинхронно - не нужно ждать!
+• Вы можете отменить любую операцию через ❌ Отмена
+• Изображения оптимизированы для Telegram
 
-Need help? Just ask!"""
+Нужна помощь? Просто спросите!"""
 
     bot.send_message(message.chat.id, help_text)
 
@@ -220,9 +190,9 @@ def analyze_channel_button(message):
 
     bot.send_message(
         message.chat.id,
-        "📊 <b>Channel Analysis</b>\n\n"
-        "Send me the channel username in format: <code>@channel_name</code>\n\n"
-        "Example: @durov",
+        "📊 <b>Анализ канала</b>\n\n"
+        "Отправьте мне username канала в формате: <code>@имя_канала</code>\n\n"
+        "Пример: @durov",
         reply_markup=cancel_keyboard()
     )
 
@@ -232,25 +202,53 @@ def generate_post_button(message):
     """Generate post button handler"""
     user_id = message.from_user.id
 
-    # Check if channel is analyzed
-    style = db.get_channel_style(user_id)
+    # Get all user's channels
+    channels = db.get_user_channels(user_id)
 
-    if not style:
+    if not channels:
         bot.send_message(
             message.chat.id,
-            "❌ Please analyze a channel first!\n\n"
-            "Use 📊 Analyze Channel to get started."
+            "❌ У вас нет проанализированных каналов!\n\n"
+            "Используйте 📊 Анализ канала для начала."
         )
         return
 
-    state_manager.set_state(user_id, STATES["WAITING_TOPIC"])
+    # If only one channel - use it directly
+    if len(channels) == 1:
+        channel_id = channels[0]['id']
+        channel_title = channels[0]['channel_title'] or channels[0]['channel_url']
+
+        state_manager.set_data(user_id, "selected_channel_id", channel_id)
+        state_manager.set_state(user_id, STATES["WAITING_TOPIC"])
+
+        bot.send_message(
+            message.chat.id,
+            f"✍️ <b>Создать пост</b>\n\n"
+            f"📺 Канал: <b>{channel_title}</b>\n\n"
+            f"На какую тему написать?\n\n"
+            f"Пример: <i>\"Новые AI тренды в 2025\"</i>",
+            reply_markup=cancel_keyboard()
+        )
+        return
+
+    # Multiple channels - show selection
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    for channel in channels:
+        channel_title = channel['channel_title'] or channel['channel_url']
+        analyzed_date = channel['analyzed_at'].strftime('%d.%m.%Y')
+
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"📺 {channel_title} ({analyzed_date})",
+                callback_data=f"select_channel_{channel['id']}"
+            )
+        )
 
     bot.send_message(
         message.chat.id,
-        "✍️ <b>Generate Post</b>\n\n"
-        "What topic should I write about?\n\n"
-        "Example: <i>\"New AI trends in 2025\"</i>",
-        reply_markup=cancel_keyboard()
+        "✍️ <b>Создать пост</b>\n\n"
+        "Выберите канал для генерации поста:",
+        reply_markup=keyboard
     )
 
 
@@ -259,8 +257,8 @@ def news_to_post_button(message):
     """News to post button handler"""
     bot.send_message(
         message.chat.id,
-        "📰 <b>News to Post</b>\n\n"
-        "Choose a news category or search by keywords:",
+        "📰 <b>Новости в пост</b>\n\n"
+        "Выберите категорию новостей или поиск по ключевым словам:",
         reply_markup=news_category_keyboard()
     )
 
@@ -274,12 +272,12 @@ def create_image_button(message):
 
     bot.send_message(
         message.chat.id,
-        "🎨 <b>Create Image</b>\n\n"
-        "Describe the image you want to create:\n\n"
-        "Examples:\n"
-        "• <i>\"Modern tech workspace with AI theme\"</i>\n"
-        "• <i>\"Social media marketing concept art\"</i>\n"
-        "• <i>\"Futuristic cityscape at sunset\"</i>",
+        "🎨 <b>Создать картинку</b>\n\n"
+        "Опишите изображение, которое хотите создать:\n\n"
+        "Примеры:\n"
+        "• <i>\"Современное рабочее место с AI темой\"</i>\n"
+        "• <i>\"Концепт-арт для социальных сетей\"</i>\n"
+        "• <i>\"Футуристический город на закате\"</i>",
         reply_markup=cancel_keyboard()
     )
 
@@ -293,9 +291,9 @@ def edit_image_button(message):
 
     bot.send_message(
         message.chat.id,
-        "✏️ <b>Edit Image</b>\n\n"
-        "Send me the image you want to edit.\n\n"
-        "After that, I'll ask what changes you want to make.",
+        "✏️ <b>Редактировать фото</b>\n\n"
+        "Отправьте мне изображение, которое хотите отредактировать.\n\n"
+        "После этого я спрошу, какие изменения вы хотите внести.",
         reply_markup=cancel_keyboard()
     )
 
@@ -305,14 +303,14 @@ def watermark_button(message):
     """Watermark button handler"""
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
-        types.InlineKeyboardButton("➕ Add Watermark", callback_data="wm_add"),
-        types.InlineKeyboardButton("➖ Remove Watermark", callback_data="wm_remove")
+        types.InlineKeyboardButton("➕ Добавить водяной знак", callback_data="wm_add"),
+        types.InlineKeyboardButton("➖ Убрать водяной знак", callback_data="wm_remove")
     )
 
     bot.send_message(
         message.chat.id,
-        "💧 <b>Watermark Tools</b>\n\n"
-        "Choose an option:",
+        "💧 <b>Инструменты водяных знаков</b>\n\n"
+        "Выберите опцию:",
         reply_markup=keyboard
     )
 
@@ -324,18 +322,18 @@ def stats_button(message):
 
     stats = db.get_user_stats(user_id)
 
-    stats_text = f"""📈 <b>Your Statistics</b>
+    stats_text = f"""📈 <b>Ваша статистика</b>
 
-📊 Channels analyzed: <b>{stats['channels_analyzed']}</b>
-✍️ Posts generated: <b>{stats['posts_generated']}</b>
-🎨 Images created: <b>{stats['images_created']}</b>
+📊 Каналов проанализировано: <b>{stats['channels_analyzed']}</b>
+✍️ Постов создано: <b>{stats['posts_generated']}</b>
+🎨 Изображений создано: <b>{stats['images_created']}</b>
 
-Keep creating amazing content! 🚀"""
+Продолжайте создавать отличный контент! 🚀"""
 
     bot.send_message(message.chat.id, stats_text)
 
 
-@bot.message_handler(func=lambda m: m.text == "❓ Help")
+@bot.message_handler(func=lambda m: m.text == "❓ Помощь")
 def help_button(message):
     """Help button handler"""
     help_handler(message)
@@ -351,7 +349,7 @@ def cancel_button(message):
 
     bot.send_message(
         message.chat.id,
-        "✅ Operation cancelled.\n\nChoose what to do next:",
+        "✅ Операция отменена.\n\nВыберите, что делать дальше:",
         reply_markup=main_menu_keyboard()
     )
 
@@ -367,18 +365,21 @@ def handle_channel_input(message):
     if not channel_url.startswith('@'):
         bot.send_message(
             message.chat.id,
-            "❌ Invalid format. Please use: <code>@channel_name</code>"
+            "❌ Неверный формат. Используйте: <code>@имя_канала</code>"
         )
         return
 
     state_manager.clear_state(user_id)
 
+    # Save channel URL for later use
+    state_manager.set_data(user_id, "analyzing_channel_url", channel_url)
+
     # Send processing message
     processing_msg = bot.send_message(
         message.chat.id,
-        "⏳ Analyzing channel...\n\n"
-        "This may take up to 1 minute.\n"
-        "I'm fetching posts and analyzing the style with AI.",
+        "⏳ Анализирую канал...\n\n"
+        "Это может занять до 1 минуты.\n"
+        "Я загружаю посты и анализирую стиль с помощью AI.",
         reply_markup=main_menu_keyboard()
     )
 
@@ -398,12 +399,23 @@ def handle_topic_input(message):
 
     state_manager.clear_state(user_id)
 
-    style = db.get_channel_style(user_id)
+    # Get the selected channel's style instead of latest
+    channel_id = state_manager.get_data(user_id, "selected_channel_id")
+    if not channel_id:
+        bot.send_message(message.chat.id, "❌ Канал не выбран. Пожалуйста, начните сначала.")
+        return
+
+    channel = db.get_channel_by_id(channel_id)
+    if not channel or channel['user_id'] != user_id:
+        bot.send_message(message.chat.id, "❌ Канал не найден.")
+        return
+
+    style = channel['style_summary']
 
     processing_msg = bot.send_message(
         message.chat.id,
-        "⏳ Generating posts...\n\n"
-        "Creating 3 variations in your channel's style.",
+        "⏳ Генерирую посты...\n\n"
+        "Создаю 3 варианта в стиле вашего канала.",
         reply_markup=main_menu_keyboard()
     )
 
@@ -448,13 +460,13 @@ def handle_image_for_edit(message):
 
     bot.send_message(
         message.chat.id,
-        "✅ Image received!\n\n"
-        "Now tell me what to change:\n\n"
-        "Examples:\n"
-        "• <i>\"Add red text 'SALE' at the top\"</i>\n"
-        "• <i>\"Make background blue\"</i>\n"
-        "• <i>\"Add company logo in corner\"</i>\n"
-        "• <i>\"Make it brighter\"</i>",
+        "✅ Изображение получено!\n\n"
+        "Теперь скажите, что изменить:\n\n"
+        "Примеры:\n"
+        "• <i>\"Добавь красный текст 'СКИДКА' вверху\"</i>\n"
+        "• <i>\"Сделай фон синим\"</i>\n"
+        "• <i>\"Добавь логотип компании в углу\"</i>\n"
+        "• <i>\"Сделай ярче\"</i>",
         reply_markup=cancel_keyboard()
     )
 
@@ -470,13 +482,13 @@ def handle_edit_instruction(message):
     img_b64 = state_manager.get_data(user_id, "current_image")
 
     if not img_b64:
-        bot.send_message(message.chat.id, "❌ Image not found. Please start over.")
+        bot.send_message(message.chat.id, "❌ Изображение не найдено. Пожалуйста, начните сначала.")
         return
 
     processing_msg = bot.send_message(
         message.chat.id,
-        "⏳ Editing image with AI...\n\n"
-        "This may take 1-2 minutes.",
+        "⏳ Редактирую изображение с AI...\n\n"
+        "Это может занять 1-2 минуты.",
         reply_markup=main_menu_keyboard()
     )
 
@@ -502,8 +514,8 @@ def handle_image_for_watermark(message):
 
     bot.send_message(
         message.chat.id,
-        "✅ Image received!\n\n"
-        "Enter watermark text:",
+        "✅ Изображение получено!\n\n"
+        "Введите текст водяного знака:",
         reply_markup=cancel_keyboard()
     )
 
@@ -520,7 +532,7 @@ def handle_watermark_text(message):
 
     processing_msg = bot.send_message(
         message.chat.id,
-        "⏳ Adding watermark...",
+        "⏳ Добавляю водяной знак...",
         reply_markup=main_menu_keyboard()
     )
 
@@ -554,27 +566,35 @@ def handle_news_keywords(message):
 
 # ===== CALLBACK HANDLERS =====
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith('lang_'))
-def language_callback(call):
-    """Language selection callback"""
+@bot.callback_query_handler(func=lambda c: c.data.startswith('select_channel_'))
+def select_channel_callback(call):
+    """Select channel for post generation"""
     user_id = call.from_user.id
-    username = call.from_user.username
-    first_name = call.from_user.first_name
+    channel_id = int(call.data.split('_')[-1])
 
     bot.answer_callback_query(call.id)
 
-    # Get selected language
-    lang = call.data.split('_')[1]  # 'en' or 'ru'
+    # Get channel info
+    channel = db.get_channel_by_id(channel_id)
 
-    # Save user with language
-    db.add_user(user_id, username, first_name, lang)
-    db.set_user_language(user_id, lang)
+    if not channel or channel['user_id'] != user_id:
+        bot.send_message(call.message.chat.id, "❌ Канал не найден")
+        return
 
-    # Delete language selection message
-    bot.delete_message(call.message.chat.id, call.message.message_id)
+    channel_title = channel['channel_title'] or channel['channel_url']
 
-    # Show main menu
-    show_main_menu(call.message, lang)
+    # Save selected channel
+    state_manager.set_data(user_id, "selected_channel_id", channel_id)
+    state_manager.set_state(user_id, STATES["WAITING_TOPIC"])
+
+    bot.send_message(
+        call.message.chat.id,
+        f"✍️ <b>Создать пост</b>\n\n"
+        f"📺 Канал: <b>{channel_title}</b>\n\n"
+        f"На какую тему написать?\n\n"
+        f"Пример: <i>\"Новые AI тренды в 2025\"</i>",
+        reply_markup=cancel_keyboard()
+    )
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('news_'))
@@ -588,8 +608,8 @@ def news_callback(call):
 
         bot.send_message(
             call.message.chat.id,
-            "🔍 Enter keywords (comma-separated):\n\n"
-            "Example: <code>Python, AI, Machine Learning</code>",
+            "🔍 Введите ключевые слова (через запятую):\n\n"
+            "Пример: <code>Python, AI, Machine Learning</code>",
             reply_markup=cancel_keyboard()
         )
         return
@@ -617,21 +637,97 @@ def select_news_callback(call):
     bot.answer_callback_query(call.id)
 
     news_list = state_manager.get_data(user_id, "news_list")
-    style = db.get_channel_style(user_id)
 
-    if not news_list or not style:
-        bot.send_message(call.message.chat.id, "❌ Data not found. Please try again.")
+    if not news_list:
+        bot.send_message(call.message.chat.id, "❌ Данные не найдены. Пожалуйста, попробуйте снова.")
         return
 
     if news_index >= len(news_list):
-        bot.send_message(call.message.chat.id, "❌ Invalid news selection.")
+        bot.send_message(call.message.chat.id, "❌ Неверный выбор новости.")
         return
 
     news_item = news_list[news_index]
 
+    # Save selected news
+    state_manager.set_data(user_id, "selected_news", news_item)
+
+    # Get user's channels
+    channels = db.get_user_channels(user_id)
+
+    if not channels:
+        bot.send_message(
+            call.message.chat.id,
+            "❌ У вас нет проанализированных каналов!\n\n"
+            "Используйте 📊 Анализ канала для начала."
+        )
+        return
+
+    # If only one channel - use it directly
+    if len(channels) == 1:
+        channel_id = channels[0]['id']
+        channel = db.get_channel_by_id(channel_id)
+        style = channel['style_summary']
+
+        processing_msg = bot.send_message(
+            call.message.chat.id,
+            f"⏳ Генерирую посты из:\n<b>{news_item['title']}</b>",
+            reply_markup=main_menu_keyboard()
+        )
+
+        task = generate_post_from_news_task.delay(style, news_item)
+        state_manager.set_task_id(user_id, task.id)
+
+        check_task_result(user_id, task.id, processing_msg.message_id, "generate_posts")
+        return
+
+    # Multiple channels - show selection
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    for channel in channels:
+        channel_title = channel['channel_title'] or channel['channel_url']
+        analyzed_date = channel['analyzed_at'].strftime('%d.%m.%Y')
+
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"📺 {channel_title} ({analyzed_date})",
+                callback_data=f"select_news_channel_{channel['id']}"
+            )
+        )
+
+    bot.send_message(
+        call.message.chat.id,
+        f"📰 <b>Выбранная новость:</b>\n{news_item['title']}\n\n"
+        "Выберите канал для генерации поста:",
+        reply_markup=keyboard
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('select_news_channel_'))
+def select_news_channel_callback(call):
+    """Select channel for news post generation"""
+    user_id = call.from_user.id
+    channel_id = int(call.data.split('_')[-1])
+
+    bot.answer_callback_query(call.id)
+
+    # Get channel info
+    channel = db.get_channel_by_id(channel_id)
+
+    if not channel or channel['user_id'] != user_id:
+        bot.send_message(call.message.chat.id, "❌ Канал не найден")
+        return
+
+    # Get selected news
+    news_item = state_manager.get_data(user_id, "selected_news")
+
+    if not news_item:
+        bot.send_message(call.message.chat.id, "❌ Новость не найдена. Пожалуйста, начните сначала.")
+        return
+
+    style = channel['style_summary']
+
     processing_msg = bot.send_message(
         call.message.chat.id,
-        f"⏳ Generating posts from:\n<b>{news_item['title']}</b>",
+        f"⏳ Генерирую посты из:\n<b>{news_item['title']}</b>",
         reply_markup=main_menu_keyboard()
     )
 
@@ -651,13 +747,13 @@ def image_provider_callback(call):
     prompt = state_manager.get_data(user_id, "image_prompt")
 
     if not prompt:
-        bot.send_message(call.message.chat.id, "❌ Prompt not found. Please try again.")
+        bot.send_message(call.message.chat.id, "❌ Промпт не найден. Пожалуйста, попробуйте снова.")
         return
 
     processing_msg = bot.send_message(
         call.message.chat.id,
-        f"🎨 Generating image with {provider.upper()}...\n\n"
-        "This may take 1-2 minutes.",
+        f"🎨 Генерирую изображение с {provider.upper()}...\n\n"
+        "Это может занять 1-2 минуты.",
         reply_markup=main_menu_keyboard()
     )
 
@@ -677,8 +773,8 @@ def watermark_callback(call):
         state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_WM"])
         bot.send_message(
             call.message.chat.id,
-            "💧 <b>Add Watermark</b>\n\n"
-            "Send me the image:",
+            "💧 <b>Добавить водяной знак</b>\n\n"
+            "Отправьте мне изображение:",
             reply_markup=cancel_keyboard()
         )
 
@@ -686,8 +782,8 @@ def watermark_callback(call):
         state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_EDIT"])
         bot.send_message(
             call.message.chat.id,
-            "💧 <b>Remove Watermark</b>\n\n"
-            "Send me the image with watermark:",
+            "💧 <b>Удалить водяной знак</b>\n\n"
+            "Отправьте мне изображение с водяным знаком:",
             reply_markup=cancel_keyboard()
         )
 
@@ -698,7 +794,7 @@ def select_post_callback(call):
     user_id = call.from_user.id
     post_index = int(call.data.split('_')[-1])
 
-    bot.answer_callback_query(call.id, "✅ Post selected!")
+    bot.answer_callback_query(call.id, "✅ Пост выбран!")
 
     posts = state_manager.get_data(user_id, "generated_posts")
 
@@ -710,7 +806,7 @@ def select_post_callback(call):
 
         bot.send_message(
             call.message.chat.id,
-            "✅ <b>Final Post:</b>\n\n" + selected + "\n\n<i>Saved to your history!</i>"
+            "✅ <b>Финальный пост:</b>\n\n" + selected + "\n\n<i>Сохранено в вашу историю!</i>"
         )
 
 
@@ -732,7 +828,7 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
                 if result.get("error"):
                     bot.send_message(
                         user_id,
-                        f"❌ Error: {result['error']}"
+                        f"❌ Ошибка: {result['error']}"
                     )
                     return
 
@@ -760,7 +856,7 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
             time.sleep(1)
             attempt += 1
 
-        bot.send_message(user_id, "❌ Task timeout. Please try again.")
+        bot.send_message(user_id, "❌ Превышено время ожидания. Пожалуйста, попробуйте снова.")
 
     # Run in thread to not block bot
     import threading
@@ -770,25 +866,38 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
 def handle_analyze_result(user_id: int, result: dict):
     """Handle channel analysis result"""
     style = result.get("style")
+    channel_title = result.get("channel_title", "Неизвестный канал")
 
     if not style:
-        bot.send_message(user_id, "❌ Analysis failed")
+        bot.send_message(user_id, "❌ Анализ не удался")
         return
 
-    # Save to DB
-    db.save_channel_style(user_id, "analyzed", style)
+    # Get channel URL from state
+    channel_url = state_manager.get_data(user_id, "analyzing_channel_url") or "unknown"
 
-    # Format response
-    response = f"""✅ <b>Channel Analysis Complete!</b>
+    # Save to DB with channel title
+    db.save_channel_style(user_id, channel_url, channel_title, style)
 
-📊 <b>Style Summary:</b>
-• Tone: {style.get('tone', 'N/A')}
-• Avg Words: {style.get('average_word_count', 0)}
-• Avg Emojis: {style.get('average_emoji_count', 0)}
+    # Clean up temp data
+    state_manager.delete_data(user_id, "analyzing_channel_url")
 
-Now you can:
-✍️ Generate posts in this style
-📰 Create posts from news"""
+    # Format response with deep analysis info
+    response = f"""✅ <b>Глубокий анализ завершен!</b>
+
+📺 <b>Канал:</b> {channel_title}
+
+📊 <b>Проанализировано постов:</b> {style.get('analyzed_posts_count', 0)}
+
+📈 <b>Основные метрики:</b>
+• Тон: {style.get('tone', 'N/A')}
+• Среднее слов: {style.get('average_word_count', 0)}
+• Среднее предложений: {style.get('average_sentence_count', 0)}
+• Среднее эмодзи: {style.get('average_emoji_count', 0)}
+
+🎯 <b>Целевая аудитория:</b> {style.get('target_audience', 'Определяется...')[:100]}...
+
+Канал сохранен в вашем списке!
+Теперь вы можете генерировать посты в этом стиле ✍️"""
 
     bot.send_message(user_id, response)
 
@@ -798,7 +907,7 @@ def handle_posts_result(user_id: int, result: dict):
     posts = result.get("posts", [])
 
     if not posts:
-        bot.send_message(user_id, "❌ No posts generated")
+        bot.send_message(user_id, "❌ Посты не созданы")
         return
 
     # Save posts
@@ -808,18 +917,18 @@ def handle_posts_result(user_id: int, result: dict):
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     for i, post in enumerate(posts):
-        bot.send_message(user_id, f"<b>Variant {i+1}:</b>\n\n{post}")
+        bot.send_message(user_id, f"<b>Вариант {i+1}:</b>\n\n{post}")
 
         keyboard.add(
             types.InlineKeyboardButton(
-                f"✅ Select Variant {i+1}",
+                f"✅ Выбрать вариант {i+1}",
                 callback_data=f"select_post_{i}"
             )
         )
 
     bot.send_message(
         user_id,
-        "Choose your favorite variant:",
+        "Выберите понравившийся вариант:",
         reply_markup=keyboard
     )
 
@@ -829,24 +938,24 @@ def handle_news_result(user_id: int, result: dict):
     news_list = result.get("news", [])
 
     if not news_list:
-        bot.send_message(user_id, "❌ No news found")
+        bot.send_message(user_id, "❌ Новости не найдены")
         return
 
     # Save news
     state_manager.set_data(user_id, "news_list", news_list)
 
     # Send news
-    response = "📰 <b>Latest News:</b>\n\n"
+    response = "📰 <b>Последние новости:</b>\n\n"
 
     keyboard = types.InlineKeyboardMarkup(row_width=1)
 
     for i, news in enumerate(news_list[:5]):
         response += f"{i+1}. <b>{news['title']}</b>\n"
-        response += f"   {news['source']} • <a href='{news['url']}'>Link</a>\n\n"
+        response += f"   {news['source']} • <a href='{news['url']}'>Ссылка</a>\n\n"
 
         keyboard.add(
             types.InlineKeyboardButton(
-                f"📝 Create post from #{i+1}",
+                f"📝 Создать пост из #{i+1}",
                 callback_data=f"select_news_{i}"
             )
         )
@@ -859,14 +968,14 @@ def handle_image_result(user_id: int, result: dict):
     img_b64 = result.get("image")
 
     if not img_b64:
-        bot.send_message(user_id, "❌ Image generation failed")
+        bot.send_message(user_id, "❌ Не удалось создать изображение")
         return
 
     # Decode image
     img_bytes = base64.b64decode(img_b64)
 
     # Send image
-    bot.send_photo(user_id, photo=img_bytes, caption="✅ Your generated image!")
+    bot.send_photo(user_id, photo=img_bytes, caption="✅ Ваше сгенерированное изображение!")
 
     # Save image data
     state_manager.set_data(user_id, "current_image", img_b64)
@@ -877,12 +986,12 @@ def handle_edited_image_result(user_id: int, result: dict):
     img_b64 = result.get("image")
 
     if not img_b64:
-        bot.send_message(user_id, "❌ Image editing failed")
+        bot.send_message(user_id, "❌ Не удалось отредактировать изображение")
         return
 
     img_bytes = base64.b64decode(img_b64)
 
-    bot.send_photo(user_id, photo=img_bytes, caption="✅ Your edited image!")
+    bot.send_photo(user_id, photo=img_bytes, caption="✅ Ваше отредактированное изображение!")
 
     state_manager.set_data(user_id, "current_image", img_b64)
 
@@ -892,12 +1001,12 @@ def handle_watermarked_image_result(user_id: int, result: dict):
     img_b64 = result.get("image")
 
     if not img_b64:
-        bot.send_message(user_id, "❌ Watermark operation failed")
+        bot.send_message(user_id, "❌ Не удалось применить водяной знак")
         return
 
     img_bytes = base64.b64decode(img_b64)
 
-    bot.send_photo(user_id, photo=img_bytes, caption="✅ Watermark applied!")
+    bot.send_photo(user_id, photo=img_bytes, caption="✅ Водяной знак применен!")
 
 
 # ===== MAIN =====
