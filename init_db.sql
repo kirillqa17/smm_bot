@@ -15,7 +15,10 @@ CREATE TABLE channels (
     id SERIAL PRIMARY KEY,
     user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
     channel_url VARCHAR(255) NOT NULL,
+    channel_title VARCHAR(255),
     style_summary JSONB,
+    deep_analysis TEXT,
+    example_posts TEXT[],
     analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, channel_url)
 );

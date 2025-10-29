@@ -378,7 +378,7 @@ def handle_channel_input(message):
     processing_msg = bot.send_message(
         message.chat.id,
         "⏳ Анализирую канал...\n\n"
-        "Это может занять до 1 минуты.\n"
+        "Это может занять до 5 минут.\n"
         "Я загружаю посты и анализирую стиль с помощью AI.",
         reply_markup=main_menu_keyboard()
     )
@@ -410,17 +410,22 @@ def handle_topic_input(message):
         bot.send_message(message.chat.id, "❌ Канал не найден.")
         return
 
-    style = channel['style_summary']
+    # Prepare full style data with deep analysis and examples
+    style_data = {
+        'style_summary': channel['style_summary'],
+        'deep_analysis': channel.get('deep_analysis', ''),
+        'example_posts': channel.get('example_posts', [])
+    }
 
     processing_msg = bot.send_message(
         message.chat.id,
-        "⏳ Генерирую посты...\n\n"
-        "Создаю 3 варианта в стиле вашего канала.",
+        "⏳ Генерирую посты с глубоким AI-анализом...\n\n"
+        "Создаю 3 варианта, НЕОТЛИЧИМЫХ от оригинального стиля.",
         reply_markup=main_menu_keyboard()
     )
 
-    # Start async task
-    task = generate_posts_task.delay(style, topic)
+    # Start async task with full data
+    task = generate_posts_task.delay(style_data, topic)
     state_manager.set_task_id(user_id, task.id)
 
     check_task_result(user_id, task.id, processing_msg.message_id, "generate_posts")
@@ -585,16 +590,84 @@ def select_channel_callback(call):
 
     # Save selected channel
     state_manager.set_data(user_id, "selected_channel_id", channel_id)
+
+    # Ask if user has an idea
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("💡 У меня есть идея для поста", callback_data=f"have_idea_{channel_id}"),
+        types.InlineKeyboardButton("🔥 Сгенерировать идеи из новостей", callback_data=f"need_ideas_{channel_id}")
+    )
+
+    bot.send_message(
+        call.message.chat.id,
+        f"✍️ <b>Создать пост</b>\n\n"
+        f"📺 Канал: <b>{channel_title}</b>\n\n"
+        f"У вас есть идея для поста, или мне предложить актуальные темы?",
+        reply_markup=keyboard
+    )
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('have_idea_'))
+def have_idea_callback(call):
+    """User has an idea for the post"""
+    user_id = call.from_user.id
+    channel_id = int(call.data.split('_')[-1])
+
+    bot.answer_callback_query(call.id)
+
+    # Get channel info
+    channel = db.get_channel_by_id(channel_id)
+    channel_title = channel['channel_title'] or channel['channel_url']
+
     state_manager.set_state(user_id, STATES["WAITING_TOPIC"])
 
     bot.send_message(
         call.message.chat.id,
         f"✍️ <b>Создать пост</b>\n\n"
         f"📺 Канал: <b>{channel_title}</b>\n\n"
-        f"На какую тему написать?\n\n"
+        f"💡 Отлично! На какую тему написать?\n\n"
         f"Пример: <i>\"Новые AI тренды в 2025\"</i>",
         reply_markup=cancel_keyboard()
     )
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('need_ideas_'))
+def need_ideas_callback(call):
+    """User needs ideas from news"""
+    user_id = call.from_user.id
+    channel_id = int(call.data.split('_')[-1])
+
+    bot.answer_callback_query(call.id)
+
+    # Get channel info
+    channel = db.get_channel_by_id(channel_id)
+    if not channel or channel['user_id'] != user_id:
+        bot.send_message(call.message.chat.id, "❌ Канал не найден")
+        return
+
+    channel_title = channel['channel_title'] or channel['channel_url']
+    style_data = {
+        'style_summary': channel['style_summary'],
+        'deep_analysis': channel.get('deep_analysis', ''),
+        'example_posts': channel.get('example_posts', [])
+    }
+
+    processing_msg = bot.send_message(
+        call.message.chat.id,
+        f"🔥 <b>Генерирую идеи для постов</b>\n\n"
+        f"📺 Канал: <b>{channel_title}</b>\n\n"
+        f"⏳ Анализирую актуальные новости и темы канала...\n"
+        f"Это займет до 5 минут.",
+        reply_markup=main_menu_keyboard()
+    )
+
+    # Import task here to avoid circular import
+    from tasks.tasks import generate_post_ideas_task
+
+    task = generate_post_ideas_task.delay(style_data)
+    state_manager.set_task_id(user_id, task.id)
+
+    check_task_result(user_id, task.id, processing_msg.message_id, "generate_ideas")
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('news_'))
@@ -666,15 +739,21 @@ def select_news_callback(call):
     if len(channels) == 1:
         channel_id = channels[0]['id']
         channel = db.get_channel_by_id(channel_id)
-        style = channel['style_summary']
+
+        # Prepare full style data
+        style_data = {
+            'style_summary': channel['style_summary'],
+            'deep_analysis': channel.get('deep_analysis', ''),
+            'example_posts': channel.get('example_posts', [])
+        }
 
         processing_msg = bot.send_message(
             call.message.chat.id,
-            f"⏳ Генерирую посты из:\n<b>{news_item['title']}</b>",
+            f"⏳ Генерирую посты с AI-анализом из:\n<b>{news_item['title']}</b>",
             reply_markup=main_menu_keyboard()
         )
 
-        task = generate_post_from_news_task.delay(style, news_item)
+        task = generate_post_from_news_task.delay(style_data, news_item)
         state_manager.set_task_id(user_id, task.id)
 
         check_task_result(user_id, task.id, processing_msg.message_id, "generate_posts")
@@ -723,15 +802,20 @@ def select_news_channel_callback(call):
         bot.send_message(call.message.chat.id, "❌ Новость не найдена. Пожалуйста, начните сначала.")
         return
 
-    style = channel['style_summary']
+    # Prepare full style data
+    style_data = {
+        'style_summary': channel['style_summary'],
+        'deep_analysis': channel.get('deep_analysis', ''),
+        'example_posts': channel.get('example_posts', [])
+    }
 
     processing_msg = bot.send_message(
         call.message.chat.id,
-        f"⏳ Генерирую посты из:\n<b>{news_item['title']}</b>",
+        f"⏳ Генерирую посты с AI-анализом из:\n<b>{news_item['title']}</b>",
         reply_markup=main_menu_keyboard()
     )
 
-    task = generate_post_from_news_task.delay(style, news_item)
+    task = generate_post_from_news_task.delay(style_data, news_item)
     state_manager.set_task_id(user_id, task.id)
 
     check_task_result(user_id, task.id, processing_msg.message_id, "generate_posts")
@@ -788,6 +872,54 @@ def watermark_callback(call):
         )
 
 
+@bot.callback_query_handler(func=lambda c: c.data.startswith('select_idea_'))
+def select_idea_callback(call):
+    """Select idea and generate post"""
+    user_id = call.from_user.id
+    idea_index = int(call.data.split('_')[-1])
+
+    bot.answer_callback_query(call.id, "✅ Идея выбрана!")
+
+    ideas = state_manager.get_data(user_id, "generated_ideas")
+    channel_id = state_manager.get_data(user_id, "selected_channel_id")
+
+    if not ideas or idea_index >= len(ideas):
+        bot.send_message(call.message.chat.id, "❌ Идея не найдена")
+        return
+
+    selected_idea = ideas[idea_index]
+
+    # Get channel data
+    channel = db.get_channel_by_id(channel_id)
+    if not channel:
+        bot.send_message(call.message.chat.id, "❌ Канал не найден")
+        return
+
+    style_data = {
+        'style_summary': channel['style_summary'],
+        'deep_analysis': channel.get('deep_analysis', ''),
+        'example_posts': channel.get('example_posts', [])
+    }
+
+    # Generate post with selected idea
+    topic = f"{selected_idea['title']}: {selected_idea['description']}"
+
+    processing_msg = bot.send_message(
+        call.message.chat.id,
+        f"⏳ Генерирую посты с глубоким AI-анализом...\n\n"
+        f"💡 <b>Тема:</b> {selected_idea['title']}\n\n"
+        f"Создаю 3 варианта, НЕОТЛИЧИМЫХ от оригинального стиля.",
+        reply_markup=main_menu_keyboard()
+    )
+
+    from tasks.tasks import generate_posts_task
+
+    task = generate_posts_task.delay(style_data, topic)
+    state_manager.set_task_id(user_id, task.id)
+
+    check_task_result(user_id, task.id, processing_msg.message_id, "generate_posts")
+
+
 @bot.callback_query_handler(func=lambda c: c.data.startswith('select_post_'))
 def select_post_callback(call):
     """Select post variant"""
@@ -797,16 +929,17 @@ def select_post_callback(call):
     bot.answer_callback_query(call.id, "✅ Пост выбран!")
 
     posts = state_manager.get_data(user_id, "generated_posts")
+    channel_id = state_manager.get_data(user_id, "selected_channel_id")
 
     if posts and post_index < len(posts):
         selected = posts[post_index]
 
-        # Save to DB
-        db.save_post(user_id, selected)
+        # Save to DB with channel_id
+        db.save_post(user_id, selected, channel_id=channel_id)
 
         bot.send_message(
             call.message.chat.id,
-            "✅ <b>Финальный пост:</b>\n\n" + selected + "\n\n<i>Сохранено в вашу историю!</i>"
+            selected
         )
 
 
@@ -814,11 +947,12 @@ def select_post_callback(call):
 
 def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
     """Check Celery task result and handle response"""
+    import html
 
     def check_and_update():
         task_result = celery_app.AsyncResult(task_id)
 
-        max_attempts = 60  # 60 seconds
+        max_attempts = 300 
         attempt = 0
 
         while attempt < max_attempts:
@@ -826,9 +960,12 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
                 result = task_result.get()
 
                 if result.get("error"):
+                    # Escape HTML to prevent parsing errors
+                    error_text = html.escape(str(result['error']))
                     bot.send_message(
                         user_id,
-                        f"❌ Ошибка: {result['error']}"
+                        f"❌ Ошибка:\n<code>{error_text[:1000]}</code>",
+                        parse_mode="HTML"
                     )
                     return
 
@@ -851,6 +988,9 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
                 elif task_type == "add_watermark":
                     handle_watermarked_image_result(user_id, result)
 
+                elif task_type == "generate_ideas":
+                    handle_ideas_result(user_id, result)
+
                 return
 
             time.sleep(1)
@@ -864,8 +1004,12 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
 
 
 def handle_analyze_result(user_id: int, result: dict):
-    """Handle channel analysis result"""
+    """Handle channel analysis result with DEEP AI analysis"""
+    import html
+
     style = result.get("style")
+    deep_analysis = result.get("deep_analysis", "")
+    example_posts = result.get("example_posts", [])
     channel_title = result.get("channel_title", "Неизвестный канал")
 
     if not style:
@@ -875,29 +1019,42 @@ def handle_analyze_result(user_id: int, result: dict):
     # Get channel URL from state
     channel_url = state_manager.get_data(user_id, "analyzing_channel_url") or "unknown"
 
-    # Save to DB with channel title
-    db.save_channel_style(user_id, channel_url, channel_title, style)
+    # Save to DB with ALL analysis data
+    db.save_channel_style(
+        user_id,
+        channel_url,
+        channel_title,
+        style,
+        deep_analysis,
+        example_posts
+    )
 
     # Clean up temp data
     state_manager.delete_data(user_id, "analyzing_channel_url")
 
-    # Format response with deep analysis info
-    response = f"""✅ <b>Глубокий анализ завершен!</b>
+    # Format response with AI analysis preview (escape HTML!)
+    analysis_preview = deep_analysis[:400] if len(deep_analysis) > 400 else deep_analysis
+    # Escape HTML entities to avoid parsing errors
+    analysis_preview = html.escape(analysis_preview)
 
-📺 <b>Канал:</b> {channel_title}
+    response = f"""✅ <b>РЕВОЛЮЦИОННЫЙ AI-АНАЛИЗ ЗАВЕРШЕН!</b>
+
+📺 <b>Канал:</b> {html.escape(channel_title)}
 
 📊 <b>Проанализировано постов:</b> {style.get('analyzed_posts_count', 0)}
 
 📈 <b>Основные метрики:</b>
-• Тон: {style.get('tone', 'N/A')}
 • Среднее слов: {style.get('average_word_count', 0)}
 • Среднее предложений: {style.get('average_sentence_count', 0)}
 • Среднее эмодзи: {style.get('average_emoji_count', 0)}
 
-🎯 <b>Целевая аудитория:</b> {style.get('target_audience', 'Определяется...')[:100]}...
+💎 <b>Сохранено примеров постов:</b> {len(example_posts)}
 
-Канал сохранен в вашем списке!
-Теперь вы можете генерировать посты в этом стиле ✍️"""
+🧠 <b>Превью глубокого анализа:</b>
+<code>{analysis_preview[:300]}...</code>
+
+✨ Теперь я буду генерировать посты, НЕОТЛИЧИМЫЕ от оригинала!
+Используйте ✍️ Создать пост для генерации."""
 
     bot.send_message(user_id, response)
 
@@ -1007,6 +1164,47 @@ def handle_watermarked_image_result(user_id: int, result: dict):
     img_bytes = base64.b64decode(img_b64)
 
     bot.send_photo(user_id, photo=img_bytes, caption="✅ Водяной знак применен!")
+
+
+def handle_ideas_result(user_id: int, result: dict):
+    """Handle generated ideas result"""
+    import html
+
+    ideas = result.get("ideas", [])
+
+    if not ideas:
+        bot.send_message(user_id, "❌ Не удалось сгенерировать идеи. Попробуйте еще раз.")
+        return
+
+    # Save ideas
+    state_manager.set_data(user_id, "generated_ideas", ideas)
+
+    # Show ideas as inline buttons
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+
+    response = "🔥 <b>Актуальные идеи для постов:</b>\n\n"
+
+    for i, idea in enumerate(ideas):
+        # Determine emoji based on news type
+        news_type = idea.get('news_type', 'world')
+        emoji = "🇷🇺" if news_type == "russian" else "🌍"
+
+        title = html.escape(idea.get('title', 'Идея'))
+        description = html.escape(idea.get('description', '')[:100])
+        source = html.escape(idea.get('news_source', 'Новости'))
+
+        response += f"{emoji} <b>{i+1}. {title}</b>\n"
+        response += f"   <i>{description}...</i>\n"
+        response += f"   📰 {source}\n\n"
+
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"✍️ Написать пост #{i+1}",
+                callback_data=f"select_idea_{i}"
+            )
+        )
+
+    bot.send_message(user_id, response, reply_markup=keyboard)
 
 
 # ===== MAIN =====

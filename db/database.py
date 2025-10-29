@@ -48,32 +48,38 @@ class Database:
                 )
 
     @staticmethod
-    def save_channel_style(user_id: int, channel_url: str, channel_title: str, style_summary: Dict) -> int:
-        """Save channel style analysis"""
+    def save_channel_style(user_id: int, channel_url: str, channel_title: str,
+                          style_summary: Dict, deep_analysis: str = None,
+                          example_posts: List[str] = None) -> int:
+        """Save channel style analysis with deep AI analysis and example posts"""
         with Database.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO channels (user_id, channel_url, channel_title, style_summary, analyzed_at)
-                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO channels (user_id, channel_url, channel_title, style_summary,
+                                         deep_analysis, example_posts, analyzed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (user_id, channel_url) DO UPDATE
                     SET channel_title = EXCLUDED.channel_title,
                         style_summary = EXCLUDED.style_summary,
+                        deep_analysis = EXCLUDED.deep_analysis,
+                        example_posts = EXCLUDED.example_posts,
                         analyzed_at = CURRENT_TIMESTAMP
                     RETURNING id
                     """,
-                    (user_id, channel_url, channel_title, Json(style_summary))
+                    (user_id, channel_url, channel_title, Json(style_summary),
+                     deep_analysis, example_posts)
                 )
                 return cur.fetchone()[0]
 
     @staticmethod
     def get_channel_style(user_id: int) -> Optional[Dict]:
-        """Get latest channel style for user"""
+        """Get latest channel style for user with deep analysis and examples"""
         with Database.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT style_summary
+                    SELECT style_summary, deep_analysis, example_posts
                     FROM channels
                     WHERE user_id = %s
                     ORDER BY analyzed_at DESC
@@ -82,7 +88,13 @@ class Database:
                     (user_id,)
                 )
                 result = cur.fetchone()
-                return dict(result['style_summary']) if result else None
+                if result:
+                    return {
+                        'style_summary': dict(result['style_summary']),
+                        'deep_analysis': result['deep_analysis'],
+                        'example_posts': result['example_posts']
+                    }
+                return None
 
     @staticmethod
     def get_user_channels(user_id: int) -> List[Dict]:
@@ -102,12 +114,13 @@ class Database:
 
     @staticmethod
     def get_channel_by_id(channel_id: int) -> Optional[Dict]:
-        """Get channel by ID"""
+        """Get channel by ID with deep analysis and examples"""
         with Database.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT id, user_id, channel_url, channel_title, style_summary, analyzed_at
+                    SELECT id, user_id, channel_url, channel_title, style_summary,
+                           deep_analysis, example_posts, analyzed_at
                     FROM channels
                     WHERE id = %s
                     """,
