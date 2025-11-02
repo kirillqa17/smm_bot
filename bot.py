@@ -50,12 +50,12 @@ def main_menu_keyboard():
     keyboard.add(
         types.KeyboardButton("📊 Анализ канала"),
         types.KeyboardButton("✍️ Создать пост"),
-        types.KeyboardButton("📰 Новости в пост"),
-        types.KeyboardButton("🎨 Создать картинку"),
-        types.KeyboardButton("✏️ Редактировать фото"),
-        types.KeyboardButton("💧 Водяной знак"),
-        types.KeyboardButton("📈 Моя статистика"),
-        types.KeyboardButton("❓ Помощь")
+        # types.KeyboardButton("📰 Новости в пост"),
+        # types.KeyboardButton("🎨 Создать картинку"),
+        # types.KeyboardButton("✏️ Редактировать фото"),
+        # types.KeyboardButton("💧 Водяной знак"),
+        # types.KeyboardButton("📈 Моя статистика"),
+        # types.KeyboardButton("❓ Помощь")
     )
     return keyboard
 
