@@ -26,6 +26,9 @@ from core.config import (
 import os
 os.makedirs(BASE_DIR / "sessions", exist_ok=True)
 
+# IMPORTANT: Set Replicate API token BEFORE using replicate
+if REPLICATE_API_KEY:
+    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_KEY
 
 # Initialize AI clients
 genai.configure(api_key=GEMINI_API_KEY)
@@ -34,10 +37,6 @@ gemini_pro_model = genai.GenerativeModel('gemini-2.5-pro')  # For deep analysis
 
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-if REPLICATE_API_KEY:
-    import os
-    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_KEY
 
 
 @celery_app.task(name='analyze_channel')
@@ -717,10 +716,11 @@ def generate_post_from_news_task(style_data: Dict, news_item: Dict) -> Dict:
 
 
 @celery_app.task(name='generate_image')
-def generate_image_task(prompt: str, provider: str = "dalle", size: str = "1024x1024") -> Dict:
-    """Generate image with AI - ASYNC"""
+def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str = "1024x1024") -> Dict:
+    """Generate image with AI - ASYNC (Updated 2025)"""
     try:
         if provider == "dalle" and OPENAI_API_KEY:
+            # DALL-E 3 - Premium quality
             response = openai_client.images.generate(
                 model="dall-e-3",
                 prompt=prompt,
@@ -732,26 +732,79 @@ def generate_image_task(prompt: str, provider: str = "dalle", size: str = "1024x
             image_url = response.data[0].url
             img_response = requests.get(image_url, timeout=30)
             img_bytes = img_response.content
-
-            # Encode to base64 for JSON serialization
             img_b64 = base64.b64encode(img_bytes).decode('utf-8')
 
             return {"success": True, "image": img_b64, "provider": "dalle"}
 
-        elif provider == "stability":
-            # Placeholder for Stability AI
-            return {"error": "Stability AI not yet implemented"}
+        elif provider == "sdxl" and REPLICATE_API_KEY:
+            # Stable Diffusion XL - Classic, best for photorealism
+            output = replicate.run(
+                "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+                input={
+                    "prompt": prompt,
+                    "negative_prompt": "ugly, blurry, low quality, distorted",
+                    "width": 1024,
+                    "height": 1024,
+                    "num_inference_steps": 30
+                }
+            )
+
+            output_url = output[0] if isinstance(output, list) else output
+            response = requests.get(output_url, timeout=60)
+            img_bytes = response.content
+            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+
+            return {"success": True, "image": img_b64, "provider": "sdxl"}
+
+        elif provider == "flux_schnell" and REPLICATE_API_KEY:
+            # Flux Schnell - Fast and high quality (2025)
+            output = replicate.run(
+                "black-forest-labs/flux-schnell",
+                input={
+                    "prompt": prompt,
+                    "num_outputs": 1,
+                    "aspect_ratio": "1:1",
+                    "output_format": "png",
+                    "output_quality": 90
+                }
+            )
+
+            output_url = output[0] if isinstance(output, list) else output
+            response = requests.get(output_url, timeout=60)
+            img_bytes = response.content
+            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+
+            return {"success": True, "image": img_b64, "provider": "flux_schnell"}
+
+        elif provider == "ideogram" and REPLICATE_API_KEY:
+            # Ideogram v3 Turbo - Best for text and logos
+            output = replicate.run(
+                "ideogram-ai/ideogram-v2-turbo",
+                input={
+                    "prompt": prompt,
+                    "aspect_ratio": "1:1",
+                    "magic_prompt_option": "Auto"
+                }
+            )
+
+            output_url = output if isinstance(output, str) else output[0]
+            response = requests.get(output_url, timeout=60)
+            img_bytes = response.content
+            img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+
+            return {"success": True, "image": img_b64, "provider": "ideogram"}
 
         else:
-            return {"error": "Invalid provider or missing API key"}
+            return {"error": f"Invalid provider '{provider}' or missing API key. Available: dalle, sdxl, flux_schnell, ideogram"}
 
     except Exception as e:
-        return {"error": f"Image generation error: {str(e)}"}
+        import traceback
+        return {"error": f"Image generation error: {str(e)}\n{traceback.format_exc()}"}
 
 
 @celery_app.task(name='edit_image')
 def edit_image_task(image_b64: str, instruction: str) -> Dict:
-    """Edit image with Nano Banana - ASYNC"""
+    """Edit image with AI (Instruct-pix2pix) - ASYNC"""
     try:
         if not REPLICATE_API_KEY:
             return {"error": "REPLICATE_API_KEY not set"}
@@ -762,19 +815,20 @@ def edit_image_task(image_b64: str, instruction: str) -> Dict:
         # Convert to data URI
         image_data_uri = f"data:image/png;base64,{image_b64}"
 
-        # Run Nano Banana
+        # Use Instruct-pix2pix for image editing (better than nano banana)
         output = replicate.run(
-            "fofr/nano-banana",
+            "timothybrooks/instruct-pix2pix:30c1d0b916a6f8efce20493f5d61ee27491ab2a60437c13c588468b9810ec23f",
             input={
                 "image": image_data_uri,
                 "prompt": instruction,
+                "num_inference_steps": 30,
                 "guidance_scale": 7.5,
-                "num_inference_steps": 50
+                "image_guidance_scale": 1.5
             }
         )
 
         # Get output URL
-        output_url = output[0] if isinstance(output, list) else output
+        output_url = output if isinstance(output, str) else output[0]
 
         # Download result
         response = requests.get(output_url, timeout=30)
@@ -786,19 +840,37 @@ def edit_image_task(image_b64: str, instruction: str) -> Dict:
         return {"success": True, "image": result_b64}
 
     except Exception as e:
-        return {"error": f"Image edit error: {str(e)}"}
+        import traceback
+        return {"error": f"Image edit error: {str(e)}\n{traceback.format_exc()}"}
 
 
 @celery_app.task(name='remove_watermark')
 def remove_watermark_task(image_b64: str) -> Dict:
-    """Remove background/watermark from image - ASYNC"""
+    """Remove watermark from image using AI inpainting - ASYNC"""
     try:
+        if not REPLICATE_API_KEY:
+            return {"error": "REPLICATE_API_KEY not set"}
+
         # Decode image
         image_bytes = base64.b64decode(image_b64)
+        image_data_uri = f"data:image/png;base64,{image_b64}"
 
-        # Use rembg to remove background
-        # This can also help remove watermarks in some cases
-        result_bytes = remove(image_bytes)
+        # Use LaMa inpainting model for watermark removal
+        # This automatically detects and removes watermarks
+        output = replicate.run(
+            "cjwbw/lama:7434dcb3e46041a00c9a2f09e72c3aeb9bdb7044eec0fa1df8f2ae19da8cd5aa",
+            input={
+                "image": image_data_uri,
+                # LaMa can automatically detect watermarks without explicit mask
+            }
+        )
+
+        # Get output URL
+        output_url = output if isinstance(output, str) else output[0]
+
+        # Download result
+        response = requests.get(output_url, timeout=30)
+        result_bytes = response.content
 
         # Encode back
         result_b64 = base64.b64encode(result_bytes).decode('utf-8')
@@ -806,12 +878,13 @@ def remove_watermark_task(image_b64: str) -> Dict:
         return {"success": True, "image": result_b64}
 
     except Exception as e:
-        return {"error": f"Watermark removal error: {str(e)}"}
+        import traceback
+        return {"error": f"Watermark removal error: {str(e)}\n{traceback.format_exc()}"}
 
 
 @celery_app.task(name='add_watermark')
 def add_watermark_task(image_b64: str, text: str) -> Dict:
-    """Add watermark to image - ASYNC"""
+    """Add watermark to image - ASYNC (Large size 5x)"""
     try:
         # Decode image
         image_bytes = base64.b64decode(image_b64)
@@ -821,19 +894,30 @@ def add_watermark_task(image_b64: str, text: str) -> Dict:
         watermark = Image.new("RGBA", img.size, (255, 255, 255, 0))
         draw = ImageDraw.Draw(watermark)
 
+        # Calculate font size based on image size (minimum 180px - 5x bigger than before)
+        # For large images, scale proportionally
+        base_font_size = 180  # 5x bigger than original 36px
+        scale_factor = min(img.width, img.height) / 1024
+        font_size = int(base_font_size * max(scale_factor, 1.0))
+
         # Try to use a font
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
         except:
-            font = ImageFont.load_default()
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            except:
+                # Fallback to default, but still try to make it bigger
+                font = ImageFont.load_default()
 
-        # Position at bottom right
+        # Position at bottom right with larger padding
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
-        position = (img.width - text_width - 20, img.height - text_height - 20)
+        padding = 40  # Increased padding
+        position = (img.width - text_width - padding, img.height - text_height - padding)
 
-        # Draw watermark
+        # Draw watermark with semi-transparent white
         draw.text(position, text, fill=(255, 255, 255, 128), font=font)
 
         # Composite
@@ -850,7 +934,8 @@ def add_watermark_task(image_b64: str, text: str) -> Dict:
         return {"success": True, "image": result_b64}
 
     except Exception as e:
-        return {"error": f"Watermark add error: {str(e)}"}
+        import traceback
+        return {"error": f"Watermark add error: {str(e)}\n{traceback.format_exc()}"}
 
 
 # Helper function
@@ -874,3 +959,82 @@ def _clean_html(text: str) -> str:
     text = re.sub(r'\n{3,}', '\n\n', text.strip())
 
     return text
+
+
+@celery_app.task(name='text_to_speech')
+def text_to_speech_task(text: str, voice: str = "neutral") -> Dict:
+    """Convert text to speech using OpenAI TTS - ASYNC"""
+    try:
+        if not OPENAI_API_KEY:
+            return {"error": "OPENAI_API_KEY not set"}
+
+        # Voice mapping
+        voice_map = {
+            "male1": "onyx",
+            "male2": "echo",
+            "female1": "nova",
+            "female2": "shimmer",
+            "neutral": "alloy"
+        }
+
+        openai_voice = voice_map.get(voice, "alloy")
+
+        # Generate speech
+        response = openai_client.audio.speech.create(
+            model="tts-1",
+            voice=openai_voice,
+            input=text,
+            speed=1.0
+        )
+
+        # Get audio bytes
+        audio_bytes = response.content
+
+        # Encode to base64
+        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        return {"success": True, "audio": audio_b64}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"TTS error: {str(e)}\n{traceback.format_exc()}"}
+
+
+@celery_app.task(name='transcribe_audio')
+def transcribe_audio_task(audio_b64: str) -> Dict:
+    """Transcribe audio/video to text using OpenAI Whisper - ASYNC"""
+    try:
+        if not OPENAI_API_KEY:
+            return {"error": "OPENAI_API_KEY not set"}
+
+        # Decode audio
+        audio_bytes = base64.b64decode(audio_b64)
+
+        # Save to temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = temp_file.name
+
+        try:
+            # Transcribe with Whisper
+            with open(temp_path, "rb") as audio_file:
+                transcript = openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="ru"  # Auto-detect if None, or specify "ru" or "en"
+                )
+
+            text = transcript.text
+
+            return {"success": True, "text": text}
+
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Transcription error: {str(e)}\n{traceback.format_exc()}"}
