@@ -1,5 +1,19 @@
 """Celery tasks for async operations"""
+import os
 from tasks.celery_app import celery_app
+
+# Import config FIRST to get API keys
+from core.config import (
+    API_ID, API_HASH, SESSION_NAME, GEMINI_API_KEY,
+    OPENAI_API_KEY, REPLICATE_API_KEY, NEWS_API_KEY,
+    MAX_POSTS_TO_ANALYZE, BASE_DIR
+)
+
+# IMPORTANT: Set Replicate API token BEFORE importing replicate
+if REPLICATE_API_KEY:
+    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_KEY
+
+# Now import replicate (will use the token from environment)
 from pyrogram import Client
 from pyrogram.errors import UsernameNotOccupied, UsernameInvalid, ChannelPrivate
 import google.generativeai as genai
@@ -16,24 +30,14 @@ import json
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
-from core.config import (
-    API_ID, API_HASH, SESSION_NAME, GEMINI_API_KEY,
-    OPENAI_API_KEY, REPLICATE_API_KEY, NEWS_API_KEY,
-    MAX_POSTS_TO_ANALYZE, BASE_DIR
-)
-
 # Ensure sessions directory exists
-import os
 os.makedirs(BASE_DIR / "sessions", exist_ok=True)
-
-# IMPORTANT: Set Replicate API token BEFORE using replicate
-if REPLICATE_API_KEY:
-    os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_KEY
 
 # Initialize AI clients
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 gemini_pro_model = genai.GenerativeModel('gemini-2.5-pro')  # For deep analysis
+gemini_image_model = genai.GenerativeModel('gemini-2.5-flash-image')  # For image generation and editing
 
 if OPENAI_API_KEY:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
@@ -717,13 +721,15 @@ def generate_post_from_news_task(style_data: Dict, news_item: Dict) -> Dict:
 
 @celery_app.task(name='generate_image')
 def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str = "1024x1024") -> Dict:
-    """Generate image with AI - ASYNC (Updated 2025)"""
+    """Generate image with AI - ASYNC (Updated 2025 with auto-translation)"""
     try:
+        # Auto-translate prompt to English for better results
+        english_prompt = translate_to_english(prompt)
         if provider == "dalle" and OPENAI_API_KEY:
             # DALL-E 3 - Premium quality
             response = openai_client.images.generate(
                 model="dall-e-3",
-                prompt=prompt,
+                prompt=english_prompt,
                 n=1,
                 size=size,
                 quality="standard"
@@ -741,7 +747,7 @@ def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str =
             output = replicate.run(
                 "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
                 input={
-                    "prompt": prompt,
+                    "prompt": english_prompt,
                     "negative_prompt": "ugly, blurry, low quality, distorted",
                     "width": 1024,
                     "height": 1024,
@@ -757,11 +763,11 @@ def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str =
             return {"success": True, "image": img_b64, "provider": "sdxl"}
 
         elif provider == "flux_schnell" and REPLICATE_API_KEY:
-            # Flux Schnell - Fast and high quality (2025)
+            # Flux Schnell - Fast and high quality (2025 version)
             output = replicate.run(
-                "black-forest-labs/flux-schnell",
+                "black-forest-labs/flux-schnell:c846a69991daf4c0e5d016514849d14ee5b2e6846ce6b9d6f21369e564cfe51e",
                 input={
-                    "prompt": prompt,
+                    "prompt": english_prompt,
                     "num_outputs": 1,
                     "aspect_ratio": "1:1",
                     "output_format": "png",
@@ -777,11 +783,11 @@ def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str =
             return {"success": True, "image": img_b64, "provider": "flux_schnell"}
 
         elif provider == "ideogram" and REPLICATE_API_KEY:
-            # Ideogram v3 Turbo - Best for text and logos
+            # Ideogram v2 Turbo - Best for text and logos (2025 version)
             output = replicate.run(
-                "ideogram-ai/ideogram-v2-turbo",
+                "ideogram-ai/ideogram-v2-turbo:7cef9d520d672bb802588ad0d13151bc51aee9a408c270aebf25d6530045dd29",
                 input={
-                    "prompt": prompt,
+                    "prompt": english_prompt,
                     "aspect_ratio": "1:1",
                     "magic_prompt_option": "Auto"
                 }
@@ -794,8 +800,31 @@ def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str =
 
             return {"success": True, "image": img_b64, "provider": "ideogram"}
 
+        elif provider == "nano_banana" and GEMINI_API_KEY:
+            # Gemini 2.5 Flash Image (Nano Banana) - Google's image generation
+            response = gemini_image_model.generate_content(
+                english_prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=1.0,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                )
+            )
+
+            # Gemini 2.5 Flash Image returns image data
+            if response.parts:
+                for part in response.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        img_bytes = part.inline_data.data
+                        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
+                        return {"success": True, "image": img_b64, "provider": "nano_banana"}
+
+            return {"error": "No image generated by Nano Banana"}
+
+
         else:
-            return {"error": f"Invalid provider '{provider}' or missing API key. Available: dalle, sdxl, flux_schnell, ideogram"}
+            return {"error": f"Invalid provider '{provider}' or missing API key. Available: dalle, sdxl, flux_schnell, ideogram, nano_banana"}
 
     except Exception as e:
         import traceback
@@ -804,40 +833,54 @@ def generate_image_task(prompt: str, provider: str = "flux_schnell", size: str =
 
 @celery_app.task(name='edit_image')
 def edit_image_task(image_b64: str, instruction: str) -> Dict:
-    """Edit image with AI (Instruct-pix2pix) - ASYNC"""
+    """Edit image with Gemini 2.5 Flash Image (Nano Banana) - ASYNC"""
     try:
-        if not REPLICATE_API_KEY:
-            return {"error": "REPLICATE_API_KEY not set"}
+        if not GEMINI_API_KEY:
+            return {"error": "GEMINI_API_KEY not set"}
 
         # Decode image
         image_bytes = base64.b64decode(image_b64)
 
-        # Convert to data URI
-        image_data_uri = f"data:image/png;base64,{image_b64}"
+        # Save to temporary file for PIL
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+            temp_file.write(image_bytes)
+            temp_path = temp_file.name
 
-        # Use Instruct-pix2pix for image editing (better than nano banana)
-        output = replicate.run(
-            "timothybrooks/instruct-pix2pix:30c1d0b916a6f8efce20493f5d61ee27491ab2a60437c13c588468b9810ec23f",
-            input={
-                "image": image_data_uri,
-                "prompt": instruction,
-                "num_inference_steps": 30,
-                "guidance_scale": 7.5,
-                "image_guidance_scale": 1.5
-            }
-        )
+        try:
+            # Open image with PIL
+            from PIL import Image as PILImage
+            image = PILImage.open(temp_path)
 
-        # Get output URL
-        output_url = output if isinstance(output, str) else output[0]
+            # Use Gemini 2.5 Flash Image for editing
+            response = gemini_image_model.generate_content(
+                [
+                    f"Transform this image: {instruction}. Maintain the overall composition but apply the requested changes.",
+                    image
+                ],
+                generation_config=genai.GenerationConfig(
+                    temperature=1.0,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=8192,
+                )
+            )
 
-        # Download result
-        response = requests.get(output_url, timeout=30)
-        result_bytes = response.content
+            # Extract edited image from response
+            if response.parts:
+                for part in response.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        result_bytes = part.inline_data.data
+                        result_b64 = base64.b64encode(result_bytes).decode('utf-8')
+                        return {"success": True, "image": result_b64}
 
-        # Encode back
-        result_b64 = base64.b64encode(result_bytes).decode('utf-8')
+            return {"error": "No edited image generated by Nano Banana"}
 
-        return {"success": True, "image": result_b64}
+        finally:
+            # Clean up temp file
+            import os
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     except Exception as e:
         import traceback
@@ -936,6 +979,26 @@ def add_watermark_task(image_b64: str, text: str) -> Dict:
     except Exception as e:
         import traceback
         return {"error": f"Watermark add error: {str(e)}\n{traceback.format_exc()}"}
+
+
+@celery_app.task(name='remove_background')
+def remove_background_task(image_b64: str) -> Dict:
+    """Remove background from image using rembg - ASYNC"""
+    try:
+        # Decode image
+        image_bytes = base64.b64decode(image_b64)
+
+        # Remove background using rembg
+        output_bytes = remove(image_bytes)
+
+        # Convert to base64
+        output_b64 = base64.b64encode(output_bytes).decode('utf-8')
+
+        return {"success": True, "image": output_b64}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Background removal error: {str(e)}\n{traceback.format_exc()}"}
 
 
 # Helper function
@@ -1038,3 +1101,436 @@ def transcribe_audio_task(audio_b64: str) -> Dict:
     except Exception as e:
         import traceback
         return {"error": f"Transcription error: {str(e)}\n{traceback.format_exc()}"}
+
+
+@celery_app.task(name='generate_video')
+def generate_video_task(prompt: str, model: str = "minimax") -> Dict:
+    """Generate video from text prompt using AI - ASYNC (Updated 2025 with auto-translation)"""
+    try:
+        if not REPLICATE_API_KEY:
+            return {"error": "REPLICATE_API_KEY not set"}
+
+        # Auto-translate prompt to English for better results
+        english_prompt = translate_to_english(prompt)
+
+        # Text-to-video models (2025 - Modern alternatives)
+        if model == "sora2":
+            # OpenAI Sora 2 - Flagship video generation with synced audio
+            output = replicate.run(
+                "openai/sora-2:6dd6f49244af4fc3cc2de9b65ab589e85870035dba05329d21c434e9172f0143",
+                input={
+                    "prompt": english_prompt
+                }
+            )
+
+        elif model == "veo3":
+            # Google Veo 3.1 - Higher-fidelity video, context-aware audio
+            output = replicate.run(
+                "google/veo-3.1:20ebd92c5919f20e8fa2e983bdb60016a99794c9accfab496ea25a68e0dbbaad",
+                input={
+                    "prompt": english_prompt
+                }
+            )
+
+        elif model == "minimax":
+            # Minimax Video-01 - High quality, realistic motion
+            output = replicate.run(
+                "minimax/video-01:5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912",
+                input={
+                    "prompt": english_prompt
+                }
+            )
+
+        elif model == "ltx":
+            # LTX-Video - Fast, DiT-based, 24 FPS at 768x512
+            output = replicate.run(
+                "lightricks/ltx-video:8c47da666861d081eeb4d1261853087de23923a268a69b63febdf5dc1dee08e4",
+                input={
+                    "prompt": english_prompt,
+                    "num_frames": 121,  # ~5 seconds at 24fps
+                    "num_inference_steps": 30
+                }
+            )
+
+        elif model == "animate_diff":
+            # AnimateDiff - Classic model (fallback option)
+            output = replicate.run(
+                "lucataco/animate-diff:beecf59c4aee8d81bf04f0381033dfa10dc16e845b4ae00d281e2fa377e48a9f",
+                input={
+                    "prompt": english_prompt,
+                    "num_frames": 16,
+                    "guidance_scale": 7.5,
+                    "num_inference_steps": 25
+                }
+            )
+
+        else:
+            return {"error": f"Invalid model '{model}'. Available: sora2, veo3, minimax, ltx, animate_diff"}
+
+        # Download video
+        video_url = output if isinstance(output, str) else output[0]
+        response = requests.get(video_url, timeout=180)
+        video_bytes = response.content
+        video_b64 = base64.b64encode(video_bytes).decode('utf-8')
+
+        return {"success": True, "video": video_b64}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Video generation error: {str(e)}\n{traceback.format_exc()}"}
+
+
+@celery_app.task(name='image_to_video')
+def image_to_video_task(image_b64: str, model: str = "svd") -> Dict:
+    """Generate video from image using AI - ASYNC (Updated 2025)"""
+    try:
+        if not REPLICATE_API_KEY:
+            return {"error": "REPLICATE_API_KEY not set"}
+
+        # Convert base64 to data URI
+        image_data_uri = f"data:image/png;base64,{image_b64}"
+
+        # Image-to-video models (2025 versions)
+        if model == "svd":
+            # Stable Video Diffusion - Classic, reliable (2025 version)
+            output = replicate.run(
+                "stability-ai/stable-video-diffusion:3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
+                input={
+                    "cond_aug": 0.02,
+                    "decoding_t": 7,
+                    "input_image": image_data_uri,
+                    "video_length": "14_frames_with_svd",
+                    "sizing_strategy": "maintain_aspect_ratio",
+                    "motion_bucket_id": 127,
+                    "frames_per_second": 6
+                }
+            )
+
+        elif model == "svd_xt":
+            # Stable Video Diffusion XL - Extended, higher quality
+            output = replicate.run(
+                "stability-ai/stable-video-diffusion:3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
+                input={
+                    "cond_aug": 0.02,
+                    "decoding_t": 14,
+                    "input_image": image_data_uri,
+                    "video_length": "25_frames_with_svd_xt",
+                    "sizing_strategy": "maintain_aspect_ratio",
+                    "motion_bucket_id": 180,
+                    "frames_per_second": 10
+                }
+            )
+
+        elif model == "svd_enhanced":
+            # Stable Video Diffusion - Enhanced motion
+            output = replicate.run(
+                "stability-ai/stable-video-diffusion:3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
+                input={
+                    "cond_aug": 0.02,
+                    "decoding_t": 10,
+                    "input_image": image_data_uri,
+                    "video_length": "14_frames_with_svd",
+                    "sizing_strategy": "maintain_aspect_ratio",
+                    "motion_bucket_id": 150,
+                    "frames_per_second": 8
+                }
+            )
+
+        else:
+            return {"error": f"Invalid model '{model}'. Available: svd, svd_xt, svd_enhanced"}
+
+        # Download video
+        video_url = output if isinstance(output, str) else output[0]
+        response = requests.get(video_url, timeout=180)
+        video_bytes = response.content
+        video_b64 = base64.b64encode(video_bytes).decode('utf-8')
+
+        return {"success": True, "video": video_b64}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Image to video error: {str(e)}\n{traceback.format_exc()}"}
+
+
+# ═══════════════════════════════════════════════════════════
+# TRANSLATION FUNCTIONS (2025)
+# ═══════════════════════════════════════════════════════════
+
+def translate_to_english(text: str) -> str:
+    """Translate text to English using Gemini (synchronous helper)"""
+    try:
+        # Detect if text is already in English (simple heuristic)
+        # If text contains mostly Latin characters, assume it's English
+        latin_chars = sum(1 for c in text if ord(c) < 128)
+        if latin_chars / len(text) > 0.8:
+            return text  # Already in English
+
+        # Use Gemini for translation
+        translation_prompt = f"""Translate the following text to English.
+Return ONLY the translation, nothing else.
+
+Text to translate:
+{text}"""
+
+        response = gemini_model.generate_content(
+            contents=[{"role": "user", "parts": [{"text": translation_prompt}]}],
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.3,  # Low temperature for accurate translation
+                max_output_tokens=2048,
+            )
+        )
+
+        translated = response.text.strip()
+        return translated
+
+    except Exception as e:
+        # If translation fails, return original text
+        return text
+
+
+@celery_app.task(name='translate_text')
+def translate_text_task(text: str, target_language: str = "en") -> Dict:
+    """Translate text to target language using Gemini - ASYNC"""
+    try:
+        if not GEMINI_API_KEY:
+            return {"error": "GEMINI_API_KEY not set"}
+
+        # Language names mapping
+        lang_names = {
+            "en": "English",
+            "ru": "Russian",
+            "es": "Spanish",
+            "fr": "French",
+            "de": "German",
+            "it": "Italian",
+            "pt": "Portuguese",
+            "zh": "Chinese",
+            "ja": "Japanese",
+            "ko": "Korean"
+        }
+
+        target_lang_name = lang_names.get(target_language, target_language)
+
+        translation_prompt = f"""Translate the following text to {target_lang_name}.
+Return ONLY the translation, nothing else. Maintain the tone and style.
+
+Text to translate:
+{text}"""
+
+        response = gemini_model.generate_content(
+            contents=[{"role": "user", "parts": [{"text": translation_prompt}]}],
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=2048,
+            )
+        )
+
+        translated = response.text.strip()
+
+        return {"success": True, "translated_text": translated}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Translation error: {str(e)}\n{traceback.format_exc()}"}
+
+
+# ═══════════════════════════════════════════════════════════
+# ADVANCED TTS WITH MULTIPLE MODELS AND VOICES (2025)
+# ═══════════════════════════════════════════════════════════
+
+@celery_app.task(name='advanced_tts')
+def advanced_tts_task(text: str, model: str = "openai", voice: str = "alloy") -> Dict:
+    """Advanced Text-to-Speech with multiple models and 50+ voices - ASYNC"""
+    try:
+        # OpenAI TTS (6 voices)
+        if model == "openai":
+            if not OPENAI_API_KEY:
+                return {"error": "OPENAI_API_KEY not set"}
+
+            # OpenAI voices: alloy, echo, fable, onyx, nova, shimmer
+            response = openai_client.audio.speech.create(
+                model="tts-1-hd",  # High quality
+                voice=voice,
+                input=text,
+                speed=1.0
+            )
+
+            audio_bytes = response.content
+            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            return {"success": True, "audio": audio_b64, "model": "openai", "voice": voice}
+
+        # Minimax Speech-02 Turbo (fast, multilingual)
+        elif model == "minimax_turbo" and REPLICATE_API_KEY:
+            output = replicate.run(
+                "minimax/speech-02-turbo",
+                input={
+                    "text": text,
+                    "voice_id": voice  # Supports various voice IDs
+                }
+            )
+
+            # Download audio
+            audio_url = output if isinstance(output, str) else output[0]
+            response = requests.get(audio_url, timeout=60)
+            audio_bytes = response.content
+            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            return {"success": True, "audio": audio_b64, "model": "minimax_turbo", "voice": voice}
+
+        # Minimax Speech-02 HD (high quality, multilingual)
+        elif model == "minimax_hd" and REPLICATE_API_KEY:
+            output = replicate.run(
+                "minimax/speech-02-hd",
+                input={
+                    "text": text,
+                    "voice_id": voice
+                }
+            )
+
+            audio_url = output if isinstance(output, str) else output[0]
+            response = requests.get(audio_url, timeout=60)
+            audio_bytes = response.content
+            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            return {"success": True, "audio": audio_b64, "model": "minimax_hd", "voice": voice}
+
+        # Kokoro TTS (82M params, efficient)
+        elif model == "kokoro" and REPLICATE_API_KEY:
+            output = replicate.run(
+                "jaaari/kokoro-82m",
+                input={
+                    "text": text,
+                    "voice": voice  # Supports multiple voices
+                }
+            )
+
+            audio_url = output if isinstance(output, str) else output[0]
+            response = requests.get(audio_url, timeout=60)
+            audio_bytes = response.content
+            audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+            return {"success": True, "audio": audio_b64, "model": "kokoro", "voice": voice}
+
+        else:
+            return {"error": f"Invalid model '{model}' or API key not set. Available: openai, minimax_turbo, minimax_hd, kokoro"}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Advanced TTS error: {str(e)}\n{traceback.format_exc()}"}
+
+
+# ═══════════════════════════════════════════════════════════
+# CHAT FUNCTIONS WITH MULTIPLE AI MODELS (2025)
+# ═══════════════════════════════════════════════════════════
+
+@celery_app.task(name='chat_with_ai')
+def chat_with_ai_task(message: str, model: str = "gemini-flash", history: List[Dict] = None) -> Dict:
+    """Chat with AI models - OpenAI, Gemini, Anthropic - ASYNC"""
+    try:
+        if history is None:
+            history = []
+
+        # OpenAI Chat Models
+        if model.startswith("gpt"):
+            if not OPENAI_API_KEY:
+                return {"error": "OPENAI_API_KEY not set"}
+
+            # Convert history to OpenAI format
+            messages = [{"role": "system", "content": "You are a helpful AI assistant."}]
+            for msg in history:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+            messages.append({"role": "user", "content": message})
+
+            # Call OpenAI API
+            response = openai_client.chat.completions.create(
+                model=model,  # gpt-4, gpt-4-turbo, gpt-3.5-turbo
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2048
+            )
+
+            reply = response.choices[0].message.content
+
+            return {
+                "success": True,
+                "response": reply,
+                "model": model,
+                "tokens_used": response.usage.total_tokens
+            }
+
+        # Gemini Models
+        elif model.startswith("gemini"):
+            if not GEMINI_API_KEY:
+                return {"error": "GEMINI_API_KEY not set"}
+
+            # Select model
+            if "pro" in model:
+                chat_model = gemini_pro_model
+            else:
+                chat_model = gemini_model  # Default to Flash
+
+            # Build conversation history
+            conversation = []
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "model"
+                conversation.append({"role": role, "parts": [{"text": msg["content"]}]})
+            conversation.append({"role": "user", "parts": [{"text": message}]})
+
+            # Generate response
+            response = chat_model.generate_content(
+                contents=conversation,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=2048,
+                )
+            )
+
+            reply = response.text
+
+            return {
+                "success": True,
+                "response": reply,
+                "model": model
+            }
+
+        # Replicate Models (LLaMA, etc.)
+        elif model.startswith("llama") or model.startswith("meta"):
+            if not REPLICATE_API_KEY:
+                return {"error": "REPLICATE_API_KEY not set"}
+
+            # Build prompt with history
+            prompt = ""
+            for msg in history:
+                role_name = msg["role"].capitalize()
+                prompt += f"{role_name}: {msg['content']}\n\n"
+            prompt += f"User: {message}\n\nAssistant:"
+
+            # Call LLaMA model
+            output = replicate.run(
+                "meta/llama-2-70b-chat",
+                input={
+                    "prompt": prompt,
+                    "max_new_tokens": 2048,
+                    "temperature": 0.7,
+                    "top_p": 0.9
+                }
+            )
+
+            # Collect output
+            reply = ""
+            for item in output:
+                reply += str(item)
+
+            return {
+                "success": True,
+                "response": reply.strip(),
+                "model": "llama-2-70b-chat"
+            }
+
+        else:
+            return {"error": f"Invalid model '{model}'. Available: gpt-4, gpt-3.5-turbo, gemini-flash, gemini-pro, llama"}
+
+    except Exception as e:
+        import traceback
+        return {"error": f"Chat error: {str(e)}\n{traceback.format_exc()}"}

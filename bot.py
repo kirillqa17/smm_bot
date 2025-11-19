@@ -20,7 +20,10 @@ from tasks.tasks import (
     generate_image_task,
     edit_image_task,
     remove_watermark_task,
-    add_watermark_task
+    add_watermark_task,
+    translate_text_task,
+    advanced_tts_task,
+    chat_with_ai_task
 )
 
 # Validate config
@@ -39,26 +42,92 @@ STATES = {
     "WAITING_IMAGE_FOR_EDIT": "waiting_image_for_edit",
     "WAITING_IMAGE_FOR_WM": "waiting_image_for_wm",
     "WAITING_IMAGE_FOR_WM_REMOVE": "waiting_image_for_wm_remove",
+    "WAITING_IMAGE_FOR_BG_REMOVE": "waiting_image_for_bg_remove",
     "WAITING_TTS_TEXT": "waiting_tts_text",
     "WAITING_STT_FILE": "waiting_stt_file",
+    "WAITING_VIDEO_PROMPT": "waiting_video_prompt",
+    "WAITING_IMAGE_FOR_VIDEO": "waiting_image_for_video",
+    "WAITING_VIDEO_FOR_SUBTITLES": "waiting_video_for_subtitles",
+    "WAITING_VIDEO_FOR_ENHANCE": "waiting_video_for_enhance",
+    "WAITING_CHAT_MESSAGE": "waiting_chat_message",
+    "WAITING_TRANSLATION_TEXT": "waiting_translation_text",
+    "WAITING_ADVANCED_TTS_TEXT": "waiting_advanced_tts_text",
 }
 
 
 # ===== KEYBOARDS =====
 
 def main_menu_keyboard():
-    """Main menu keyboard"""
+    """Main menu keyboard - Category based (Updated 2025)"""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    keyboard.add(
+        types.KeyboardButton("📝 Текст"),
+        types.KeyboardButton("🎨 Изображения"),
+        types.KeyboardButton("🎬 Видео"),
+        types.KeyboardButton("🎵 Аудио"),
+        types.KeyboardButton("📊 Анализ"),
+        types.KeyboardButton("❓ Помощь")
+    )
+    return keyboard
+
+
+def text_menu_keyboard():
+    """Text operations submenu (Updated 2025)"""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    keyboard.add(
+        types.KeyboardButton("✍️ Создать пост"),
+        types.KeyboardButton("💬 Чат с AI"),
+        types.KeyboardButton("🌐 Перевести текст"),
+        types.KeyboardButton("🔙 Назад")
+    )
+    return keyboard
+
+
+def audio_menu_keyboard():
+    """Audio operations submenu (New 2025)"""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    keyboard.add(
+        types.KeyboardButton("🎤 Озвучить текст"),
+        types.KeyboardButton("🎙 Транскрибировать"),
+        types.KeyboardButton("🔙 Назад")
+    )
+    return keyboard
+
+
+def image_menu_keyboard():
+    """Image operations submenu"""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    keyboard.add(
+        types.KeyboardButton("🆕 Создать картинку"),
+        types.KeyboardButton("✏️ Редактировать фото"),
+        types.KeyboardButton("🗑 Убрать фон"),
+        types.KeyboardButton("➕ Добавить водяной знак"),
+        types.KeyboardButton("➖ Убрать водяной знак"),
+        types.KeyboardButton("🔙 Назад")
+    )
+    return keyboard
+
+
+def video_menu_keyboard():
+    """Video operations submenu"""
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    keyboard.add(
+        types.KeyboardButton("🎬 Создать видео"),
+        types.KeyboardButton("🖼️ Видео из картинки"),
+        types.KeyboardButton("📝 Добавить субтитры"),
+        types.KeyboardButton("✨ Улучшить видео"),
+        types.KeyboardButton("🔙 Назад")
+    )
+    return keyboard
+
+
+def analytics_menu_keyboard():
+    """Analytics submenu"""
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     keyboard.add(
         types.KeyboardButton("📊 Анализ канала"),
-        types.KeyboardButton("✍️ Создать пост"),
-        types.KeyboardButton("🎨 Создать картинку"),
-        types.KeyboardButton("✏️ Редактировать фото"),
-        types.KeyboardButton("🎤 Озвучить текст"),
-        types.KeyboardButton("🎙 Транскрибировать"),
-        types.KeyboardButton("💧 Водяной знак"),
         types.KeyboardButton("📈 Моя статистика"),
-        types.KeyboardButton("❓ Помощь")
+        types.KeyboardButton("🔙 Назад")
     )
     return keyboard
 
@@ -74,6 +143,10 @@ def image_provider_keyboard():
     """Image generation provider keyboard with descriptions"""
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     keyboard.add(
+        types.InlineKeyboardButton(
+            "🍌 Nano Banana - Google Gemini 2.5 ($0.039)",
+            callback_data="img_nano_banana"
+        ),
         types.InlineKeyboardButton(
             "🌟 Flux Schnell - Быстро и качественно ($0.003)",
             callback_data="img_flux_schnell"
@@ -107,6 +180,54 @@ def tts_voice_keyboard():
     return keyboard
 
 
+def video_model_keyboard():
+    """Video generation model keyboard (Updated 2025)"""
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "🌟 Sora 2 - OpenAI, флагман со звуком",
+            callback_data="video_sora2"
+        ),
+        types.InlineKeyboardButton(
+            "🎬 Veo 3.1 - Google, высокая точность",
+            callback_data="video_veo3"
+        ),
+        types.InlineKeyboardButton(
+            "🎥 Minimax Video-01 - Реалистичное движение",
+            callback_data="video_minimax"
+        ),
+        types.InlineKeyboardButton(
+            "⚡ LTX-Video - Быстро, 24 FPS",
+            callback_data="video_ltx"
+        ),
+        types.InlineKeyboardButton(
+            "🌊 AnimateDiff - Классика (fallback)",
+            callback_data="video_animate_diff"
+        )
+    )
+    return keyboard
+
+
+def image_to_video_model_keyboard():
+    """Image-to-video model keyboard (Updated 2025)"""
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "📹 SVD - Stable Video Diffusion (базовый)",
+            callback_data="i2v_svd"
+        ),
+        types.InlineKeyboardButton(
+            "🎬 SVD-XT - Расширенный, больше кадров",
+            callback_data="i2v_svd_xt"
+        ),
+        types.InlineKeyboardButton(
+            "🚀 SVD Enhanced - Улучшенное движение",
+            callback_data="i2v_svd_enhanced"
+        )
+    )
+    return keyboard
+
+
 # ===== START & HELP =====
 
 @bot.message_handler(commands=['start'])
@@ -133,16 +254,20 @@ def show_main_menu(message):
 
 Я ваш AI-ассистент для создания контента в социальных сетях.
 
-<b>Что я умею:</b>
-📊 Анализировать стиль Telegram каналов
-✍️ Генерировать посты в любом стиле (с предложением актуальных новостей)
-🎨 Генерировать AI изображения (DALL-E 3, Stable Diffusion, Flux)
-✏️ Редактировать изображения с AI (Google Imagen 3)
-🎤 Озвучивать текст с выбором голосов (TTS)
-🎙 Транскрибировать аудио/видео в текст (STT)
-💧 Добавлять/удалять водяные знаки
+<b>Категории:</b>
+📝 <b>Текст</b> - Создание постов, озвучка, транскрибация
+🎨 <b>Изображения</b> - Генерация, редактирование, удаление фона
+🎬 <b>Видео</b> - Генерация видео, анимация изображений
+📊 <b>Анализ</b> - Анализ каналов, статистика
+❓ <b>Помощь</b> - Подробная справка
 
-Выберите опцию из меню ниже или введите /help для подробной информации."""
+<b>Технологии:</b>
+• AI модели: GPT-4, DALL-E 3, Flux, SDXL, Ideogram
+• Видео: Stable Video Diffusion, AnimateDiff
+• Удаление фона с помощью AI
+• Анализ стиля с глубоким AI
+
+Выберите категорию из меню ниже."""
 
     bot.send_message(
         message.chat.id,
@@ -156,61 +281,162 @@ def help_handler(message):
     """Help command handler"""
     help_text = """<b>📚 Справка по SMM Bot</b>
 
-<b>Основные функции:</b>
+<b>Навигация:</b>
+Бот использует категории для удобной навигации:
+📝 Текст | 🎨 Изображения | 📊 Анализ | ❓ Помощь
+Используйте кнопку "🔙 Назад" для возврата в главное меню.
 
-📊 <b>Анализ канала</b>
-Анализ стиля, тона и структуры любого Telegram канала.
-Просто укажите username канала (@канал).
+<b>📝 ТЕКСТ</b>
 
-✍️ <b>Создать пост</b>
-Создание постов в стиле вашего канала.
-При генерации бот предложит актуальные темы из новостей или вы можете ввести свою тему.
+<b>✍️ Создать пост</b>
+• Анализ стиля вашего Telegram канала
+• Генерация постов, неотличимых от оригинала
+• Предложение актуальных новостей для постов
+• 3 варианта на выбор
 
-🎨 <b>Создать картинку</b>
-Генерация изображений с помощью AI:
-• DALL-E 3 (OpenAI) - высокое качество
-• Stable Diffusion XL - быстрая генерация
-• Flux - новейшая модель
-• Midjourney (через API)
-
-✏️ <b>Редактировать фото</b>
-Редактирование изображений с Google Imagen 3:
-- Добавление/изменение объектов
-- Изменение стиля и цветов
-- Применение эффектов
-- Инпейнтинг и аутпейнтинг
-
-🎤 <b>Озвучить текст</b>
-Преобразование текста в речь (TTS):
-• Выбор из нескольких голосов
+<b>🎤 Озвучить текст (TTS)</b>
+• Выбор из 5 голосов (мужские, женские, нейтральный)
 • Поддержка русского и английского
 • Высокое качество озвучки
 
-🎙 <b>Транскрибировать</b>
-Преобразование аудио/видео в текст (STT):
-• Поддержка различных форматов
+<b>🎙 Транскрибировать (STT)</b>
+• Преобразование аудио/видео в текст
+• Поддержка MP3, WAV, OGG, M4A, MP4, MOV, AVI
 • Автоматическое определение языка
-• Точная транскрибация
 
-💧 <b>Водяной знак</b>
-• Добавление: текстовый водяной знак
-• Удаление: AI-удаление водяных знаков с изображений
+<b>🎨 ИЗОБРАЖЕНИЯ</b>
 
-📈 <b>Моя статистика</b>
-Просмотр статистики использования.
+<b>🆕 Создать картинку</b>
+• Flux Schnell - быстро и качественно ($0.003)
+• SDXL - классика, фотореализм ($0.0023)
+• Ideogram v3 Turbo - лучший для текста ($0.08)
+• DALL-E 3 - премиум качество ($0.04)
 
-<b>Полезные советы:</b>
-• Все задачи выполняются асинхронно - не нужно ждать!
-• Вы можете отменить любую операцию через ❌ Отмена
+<b>✏️ Редактировать фото</b>
+• AI редактирование с Imagen 3
+• Добавление/изменение объектов
+• Изменение стилей и цветов
+• Инпейнтинг и аутпейнтинг
+
+<b>🗑 Убрать фон</b>
+• AI удаление фона с изображений
+• Идеально для логотипов, портретов, продуктов
+• Высокая точность и качество
+
+<b>➕➖ Водяные знаки</b>
+• Добавление текстовых водяных знаков
+• AI-удаление водяных знаков с изображений
+
+<b>🎬 ВИДЕО</b>
+
+<b>🎬 Создать видео</b>
+• Генерация видео по текстовому описанию
+• AnimateDiff для динамичных сцен
+• Настройка длительности и стиля
+
+<b>🖼️ Видео из картинки</b>
+• Оживление статичных изображений
+• Stable Video Diffusion для плавной анимации
+• Идеально для презентаций и соцсетей
+
+<b>📝 Добавить субтитры</b>
+• Автоматическое распознавание речи
+• Поддержка русского и английского
+• Синхронизация с видео
+
+<b>✨ Улучшить видео</b>
+• Upscaling до 4K
+• Стабилизация и улучшение качества
+• Коррекция цветов и контраста
+
+<b>📊 АНАЛИЗ</b>
+
+<b>📊 Анализ канала</b>
+• Глубокий AI-анализ стиля канала
+• Анализ тона, структуры, метрик
+• Сохранение примеров постов
+
+<b>📈 Моя статистика</b>
+• Количество проанализированных каналов
+• Созданные посты и изображения
+
+<b>💡 Полезные советы:</b>
+• Все задачи выполняются асинхронно
+• Используйте ❌ Отмена для отмены операции
 • Изображения оптимизированы для Telegram
-
-Нужна помощь? Просто спросите!"""
+• Чем подробнее промпт, тем лучше результат"""
 
     bot.send_message(message.chat.id, help_text)
 
 
 # ===== MENU BUTTON HANDLERS =====
 
+# Category handlers
+@bot.message_handler(func=lambda m: m.text == "📝 Текст")
+def text_category_handler(message):
+    """Text category handler"""
+    bot.send_message(
+        message.chat.id,
+        "📝 <b>Текст</b>\n\n"
+        "Выберите операцию:",
+        reply_markup=text_menu_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🎨 Изображения")
+def image_category_handler(message):
+    """Image category handler"""
+    bot.send_message(
+        message.chat.id,
+        "🎨 <b>Изображения</b>\n\n"
+        "Выберите операцию:",
+        reply_markup=image_menu_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🎬 Видео")
+def video_category_handler(message):
+    """Video category handler"""
+    bot.send_message(
+        message.chat.id,
+        "🎬 <b>Видео</b>\n\n"
+        "Выберите операцию:",
+        reply_markup=video_menu_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "📊 Анализ")
+def analytics_category_handler(message):
+    """Analytics category handler"""
+    bot.send_message(
+        message.chat.id,
+        "📊 <b>Анализ</b>\n\n"
+        "Выберите операцию:",
+        reply_markup=analytics_menu_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🎵 Аудио")
+def audio_category_handler(message):
+    """Audio category handler (New 2025)"""
+    bot.send_message(
+        message.chat.id,
+        "🎵 <b>Аудио</b>\n\n"
+        "Выберите операцию:\n"
+        "🎤 Озвучить текст - TTS с множеством голосов\n"
+        "🎙 Транскрибировать - Распознавание речи",
+        reply_markup=audio_menu_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🔙 Назад")
+def back_button_handler(message):
+    """Back button handler"""
+    show_main_menu(message)
+
+
+# Existing menu handlers (updated)
 @bot.message_handler(func=lambda m: m.text in ["📊 Analyze Channel", "📊 Анализ канала"])
 def analyze_channel_button(message):
     """Analyze channel button handler"""
@@ -284,7 +510,7 @@ def generate_post_button(message):
 
 
 
-@bot.message_handler(func=lambda m: m.text in ["🎨 Create Image", "🎨 Создать картинку"])
+@bot.message_handler(func=lambda m: m.text in ["🎨 Create Image", "🎨 Создать картинку", "🆕 Создать картинку"])
 def create_image_button(message):
     """Create image button handler"""
     user_id = message.from_user.id
@@ -321,22 +547,75 @@ def edit_image_button(message):
     )
 
 
-@bot.message_handler(func=lambda m: m.text in ["🎤 Text to Speech", "🎤 Озвучить текст"])
-def tts_button(message):
-    """TTS button handler"""
+@bot.message_handler(func=lambda m: m.text == "💬 Чат с AI")
+def chat_with_ai_button(message):
+    """Chat with AI button handler (New 2025)"""
     user_id = message.from_user.id
 
-    state_manager.set_state(user_id, STATES["WAITING_TTS_TEXT"])
+    # Show model selection
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("🤖 GPT-4", callback_data="chat_gpt-4"),
+        types.InlineKeyboardButton("⚡ GPT-3.5", callback_data="chat_gpt-3.5-turbo"),
+        types.InlineKeyboardButton("✨ Gemini Flash", callback_data="chat_gemini-flash"),
+        types.InlineKeyboardButton("🧠 Gemini Pro", callback_data="chat_gemini-pro"),
+        types.InlineKeyboardButton("🦙 LLaMA 70B", callback_data="chat_llama")
+    )
 
     bot.send_message(
         message.chat.id,
-        "🎤 <b>Озвучить текст</b>\n\n"
-        "Отправьте текст, который хотите озвучить:\n\n"
-        "Примеры:\n"
-        "• <i>\"Добро пожаловать в наш канал!\"</i>\n"
-        "• <i>\"Сегодня мы расскажем о новых технологиях\"</i>\n\n"
-        "Поддерживаются русский и английский языки.",
-        reply_markup=cancel_keyboard()
+        "💬 <b>Чат с AI</b>\n\n"
+        "Выберите модель для общения:\n\n"
+        "🤖 GPT-4 - Самая мощная модель OpenAI\n"
+        "⚡ GPT-3.5 - Быстрая и доступная\n"
+        "✨ Gemini Flash - Быстрая от Google\n"
+        "🧠 Gemini Pro - Продвинутая от Google\n"
+        "🦙 LLaMA 70B - Open-source модель Meta",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🌐 Перевести текст")
+def translate_text_button(message):
+    """Translate text button handler (New 2025)"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_TRANSLATION_TEXT"])
+
+    bot.send_message(
+        message.chat.id,
+        "🌐 <b>Перевод текста</b>\n\n"
+        "Отправьте текст для перевода.\n\n"
+        "После этого вы сможете выбрать целевой язык.",
+        reply_markup=cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@bot.message_handler(func=lambda m: m.text in ["🎤 Text to Speech", "🎤 Озвучить текст"])
+def tts_button(message):
+    """TTS button handler with 20 voices (Updated 2025)"""
+    user_id = message.from_user.id
+
+    # Show voice category selection
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("👨 Мужские голоса (8)", callback_data="tts_category_male"),
+        types.InlineKeyboardButton("👩 Женские голоса (8)", callback_data="tts_category_female"),
+        types.InlineKeyboardButton("🎭 Нейтральные (4)", callback_data="tts_category_neutral")
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🎤 <b>Озвучка текста</b>\n\n"
+        "Выберите категорию голоса:\n\n"
+        "👨 Мужские - Echo, Onyx, Fable (разные темпы)\n"
+        "👩 Женские - Nova, Shimmer, Alloy (разные темпы)\n"
+        "🎭 Нейтральные - Alloy в разных вариациях\n\n"
+        "<b>Всего доступно 20 голосов!</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
     )
 
 
@@ -359,20 +638,123 @@ def stt_button(message):
     )
 
 
-@bot.message_handler(func=lambda m: m.text in ["💧 Watermark", "💧 Водяной знак"])
-def watermark_button(message):
-    """Watermark button handler"""
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-    keyboard.add(
-        types.InlineKeyboardButton("➕ Добавить водяной знак", callback_data="wm_add"),
-        types.InlineKeyboardButton("➖ Убрать водяной знак", callback_data="wm_remove")
-    )
+@bot.message_handler(func=lambda m: m.text in ["💧 Watermark", "💧 Водяной знак", "➕ Добавить водяной знак"])
+def watermark_add_button(message):
+    """Add watermark button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_WM"])
 
     bot.send_message(
         message.chat.id,
-        "💧 <b>Инструменты водяных знаков</b>\n\n"
-        "Выберите опцию:",
-        reply_markup=keyboard
+        "💧 <b>Добавить водяной знак</b>\n\n"
+        "Отправьте мне изображение:",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "➖ Убрать водяной знак")
+def watermark_remove_button(message):
+    """Remove watermark button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_WM_REMOVE"])
+
+    bot.send_message(
+        message.chat.id,
+        "💧 <b>Удалить водяной знак</b>\n\n"
+        "Отправьте мне изображение с водяным знаком:\n\n"
+        "⚡ <b>Используется AI-инпейнтинг для удаления водяных знаков</b>",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🗑 Убрать фон")
+def remove_background_button(message):
+    """Remove background button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_BG_REMOVE"])
+
+    bot.send_message(
+        message.chat.id,
+        "🗑 <b>Удалить фон с изображения</b>\n\n"
+        "Отправьте мне изображение, с которого нужно убрать фон:\n\n"
+        "⚡ <b>Используется AI для точного удаления фона</b>\n"
+        "✨ <b>Идеально для логотипов, портретов и продуктов</b>",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🎬 Создать видео")
+def create_video_button(message):
+    """Create video button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_VIDEO_PROMPT"])
+
+    bot.send_message(
+        message.chat.id,
+        "🎬 <b>Создать видео с AI</b>\n\n"
+        "Опишите видео, которое хотите создать.\n\n"
+        "<b>Примеры:</b>\n"
+        "• <i>\"Космонавт плывет в космосе, реалистичное 4K\"</i>\n"
+        "• <i>\"Красивый закат над океаном, волны, релаксация\"</i>\n"
+        "• <i>\"Динамичная анимация логотипа компании\"</i>\n\n"
+        "💡 <b>Совет:</b> Опишите движение, стиль, атмосферу",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "🖼️ Видео из картинки")
+def video_from_image_button(message):
+    """Video from image button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_VIDEO"])
+
+    bot.send_message(
+        message.chat.id,
+        "🖼️ <b>Создать видео из картинки</b>\n\n"
+        "Отправьте мне изображение, из которого нужно создать видео:\n\n"
+        "⚡ <b>AI добавит движение и анимацию к вашему изображению</b>\n"
+        "✨ <b>Идеально для оживления фото и иллюстраций</b>",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "📝 Добавить субтитры")
+def add_subtitles_button(message):
+    """Add subtitles button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_VIDEO_FOR_SUBTITLES"])
+
+    bot.send_message(
+        message.chat.id,
+        "📝 <b>Добавить субтитры в видео</b>\n\n"
+        "Отправьте мне видео, к которому нужно добавить субтитры:\n\n"
+        "⚡ <b>AI автоматически распознает речь и создаст субтитры</b>\n"
+        "✨ <b>Поддержка русского и английского языков</b>",
+        reply_markup=cancel_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "✨ Улучшить видео")
+def enhance_video_button(message):
+    """Enhance video button handler"""
+    user_id = message.from_user.id
+
+    state_manager.set_state(user_id, STATES["WAITING_VIDEO_FOR_ENHANCE"])
+
+    bot.send_message(
+        message.chat.id,
+        "✨ <b>Улучшить видео</b>\n\n"
+        "Отправьте мне видео для улучшения:\n\n"
+        "⚡ <b>AI улучшит качество, стабилизацию и цвета</b>\n"
+        "🎨 <b>Upscaling до 4K, улучшение четкости</b>\n"
+        "🎬 <b>Стабилизация и удаление шумов</b>",
+        reply_markup=cancel_keyboard()
     )
 
 
@@ -612,6 +994,35 @@ def handle_image_for_watermark_remove(message):
     check_task_result(user_id, task.id, processing_msg.message_id, "remove_watermark")
 
 
+@bot.message_handler(content_types=['photo'], func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_IMAGE_FOR_BG_REMOVE"])
+def handle_image_for_bg_remove(message):
+    """Handle image for background removal"""
+    user_id = message.from_user.id
+
+    state_manager.clear_state(user_id)
+
+    photo = message.photo[-1]
+    file_info = bot.get_file(photo.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    img_b64 = base64.b64encode(downloaded_file).decode('utf-8')
+
+    processing_msg = bot.send_message(
+        message.chat.id,
+        "⏳ Удаляю фон с помощью AI...\n\n"
+        "Это займет несколько секунд.",
+        reply_markup=main_menu_keyboard()
+    )
+
+    # Import task
+    from tasks.tasks import remove_background_task
+
+    task = remove_background_task.delay(img_b64)
+    state_manager.set_task_id(user_id, task.id)
+
+    check_task_result(user_id, task.id, processing_msg.message_id, "remove_background")
+
+
 @bot.message_handler(func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_WATERMARK_TEXT"])
 def handle_watermark_text(message):
     """Handle watermark text"""
@@ -714,6 +1125,219 @@ def handle_stt_file(message):
     check_task_result(user_id, task.id, processing_msg.message_id, "transcribe")
 
 
+@bot.message_handler(func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_VIDEO_PROMPT"])
+def handle_video_prompt(message):
+    """Handle video generation prompt"""
+    user_id = message.from_user.id
+    prompt = message.text.strip()
+
+    state_manager.set_data(user_id, "video_prompt", prompt)
+
+    bot.send_message(
+        message.chat.id,
+        "🎬 Выберите модель для генерации видео:",
+        reply_markup=video_model_keyboard()
+    )
+
+
+@bot.message_handler(content_types=['photo'], func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_IMAGE_FOR_VIDEO"])
+def handle_image_for_video(message):
+    """Handle image for video generation"""
+    user_id = message.from_user.id
+
+    photo = message.photo[-1]
+    file_info = bot.get_file(photo.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    img_b64 = base64.b64encode(downloaded_file).decode('utf-8')
+
+    state_manager.set_data(user_id, "image_for_video", img_b64)
+
+    bot.send_message(
+        message.chat.id,
+        "🎬 Выберите модель для создания видео:",
+        reply_markup=image_to_video_model_keyboard()
+    )
+
+
+@bot.message_handler(func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_CHAT_MESSAGE"])
+def handle_chat_message(message):
+    """Handle chat message with AI (New 2025)"""
+    user_id = message.from_user.id
+
+    # Check for stop command
+    if message.text and message.text.lower() in ['/stop', 'стоп', 'stop']:
+        state_manager.clear_state(user_id)
+        bot.send_message(
+            message.chat.id,
+            "✅ Чат завершен!",
+            reply_markup=text_menu_keyboard()
+        )
+        return
+
+    model = state_manager.get_data(user_id, "chat_model") or "gemini-flash"
+    chat_history = state_manager.get_data(user_id, "chat_history") or []
+
+    # Show processing
+    processing_msg = bot.send_message(
+        message.chat.id,
+        "🤖 Думаю...",
+        parse_mode="HTML"
+    )
+
+    # Call chat task
+    task = chat_with_ai_task.delay(message.text, model, chat_history)
+
+    try:
+        result = task.get(timeout=120)
+
+        if "error" in result:
+            bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=processing_msg.message_id,
+                text=f"❌ Ошибка: {result['error']}"
+            )
+        else:
+            # Update history
+            chat_history.append({"role": "user", "content": message.text})
+            chat_history.append({"role": "assistant", "content": result['response']})
+            state_manager.set_data(user_id, "chat_history", chat_history)
+
+            # Send response
+            bot.delete_message(message.chat.id, processing_msg.message_id)
+
+            response_text = result['response']
+            if len(response_text) > 4000:
+                # Split long messages
+                for i in range(0, len(response_text), 4000):
+                    bot.send_message(
+                        message.chat.id,
+                        response_text[i:i+4000],
+                        parse_mode="HTML"
+                    )
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    f"🤖 <b>{result['model']}</b>:\n\n{response_text}\n\n"
+                    f"<i>Продолжайте диалог или /stop для завершения</i>",
+                    parse_mode="HTML"
+                )
+    except Exception as e:
+        bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=processing_msg.message_id,
+            text=f"❌ Ошибка: {str(e)}"
+        )
+
+
+@bot.message_handler(func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_TRANSLATION_TEXT"])
+def handle_translation_text(message):
+    """Handle text for translation (New 2025)"""
+    user_id = message.from_user.id
+    text = message.text.strip()
+
+    if len(text) > 5000:
+        bot.send_message(
+            message.chat.id,
+            "❌ Текст слишком длинный! Максимум 5000 символов."
+        )
+        return
+
+    # Store text
+    state_manager.set_data(user_id, "text_to_translate", text)
+
+    # Show language selection
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("🇬🇧 English", callback_data="translate_en"),
+        types.InlineKeyboardButton("🇷🇺 Русский", callback_data="translate_ru"),
+        types.InlineKeyboardButton("🇪🇸 Español", callback_data="translate_es"),
+        types.InlineKeyboardButton("🇫🇷 Français", callback_data="translate_fr"),
+        types.InlineKeyboardButton("🇩🇪 Deutsch", callback_data="translate_de"),
+        types.InlineKeyboardButton("🇮🇹 Italiano", callback_data="translate_it"),
+        types.InlineKeyboardButton("🇵🇹 Português", callback_data="translate_pt"),
+        types.InlineKeyboardButton("🇨🇳 中文", callback_data="translate_zh"),
+        types.InlineKeyboardButton("🇯🇵 日本語", callback_data="translate_ja"),
+        types.InlineKeyboardButton("🇰🇷 한국어", callback_data="translate_ko")
+    )
+
+    bot.send_message(
+        message.chat.id,
+        "🌐 <b>Выберите целевой язык:</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+@bot.message_handler(func=lambda m: state_manager.get_state(m.from_user.id) == STATES["WAITING_ADVANCED_TTS_TEXT"])
+def handle_advanced_tts_text(message):
+    """Handle text for advanced TTS with 20 voices (New 2025)"""
+    user_id = message.from_user.id
+    text = message.text.strip()
+
+    if len(text) > 4096:
+        bot.send_message(
+            message.chat.id,
+            "❌ Текст слишком длинный! Максимум 4096 символов."
+        )
+        return
+
+    voice = state_manager.get_data(user_id, "tts_voice") or "alloy"
+    speed_type = state_manager.get_data(user_id, "tts_speed") or "normal"
+
+    # Map speed to actual speed value
+    speed_map = {
+        "normal": 1.0,
+        "fast": 1.25,
+        "slow": 0.85,
+        "vslow": 0.7
+    }
+    speed_value = speed_map.get(speed_type, 1.0)
+
+    processing_msg = bot.send_message(
+        message.chat.id,
+        f"🎤 Генерирую аудио...\n\n"
+        f"Голос: {voice.capitalize()}\n"
+        f"Темп: {speed_value}x",
+        parse_mode="HTML"
+    )
+
+    # Generate audio using OpenAI with speed parameter
+    try:
+        from openai import OpenAI
+        from core.config import OPENAI_API_KEY
+        import base64
+
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+        response = openai_client.audio.speech.create(
+            model="tts-1-hd",
+            voice=voice,
+            input=text,
+            speed=speed_value
+        )
+
+        audio_bytes = response.content
+
+        # Send audio
+        bot.delete_message(message.chat.id, processing_msg.message_id)
+        bot.send_audio(
+            message.chat.id,
+            audio_bytes,
+            caption=f"🎤 Голос: {voice.capitalize()} | Темп: {speed_value}x",
+            title="TTS Audio"
+        )
+
+    except Exception as e:
+        bot.edit_message_text(
+            chat_id=message.chat.id,
+            message_id=processing_msg.message_id,
+            text=f"❌ Ошибка генерации: {str(e)}"
+        )
+
+    state_manager.clear_state(user_id)
+
+
 # ===== CALLBACK HANDLERS =====
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('select_channel_'))
@@ -813,8 +1437,102 @@ def need_ideas_callback(call):
     state_manager.set_task_id(user_id, task.id)
 
     check_task_result(user_id, task.id, processing_msg.message_id, "generate_ideas")
+# ===== CHAT WITH AI CALLBACKS =====
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('chat_'))
+def chat_model_callback(call):
+    """Chat model selection callback (New 2025)"""
+    user_id = call.from_user.id
+    bot.answer_callback_query(call.id)
+
+    model = call.data.replace('chat_', '')
+
+    # Store model choice
+    state_manager.set_data(user_id, "chat_model", model)
+    state_manager.set_state(user_id, STATES["WAITING_CHAT_MESSAGE"])
+
+    # Clear chat history
+    state_manager.set_data(user_id, "chat_history", [])
+
+    model_names = {
+        "gpt-4": "GPT-4",
+        "gpt-3.5-turbo": "GPT-3.5 Turbo",
+        "gemini-flash": "Gemini 2.5 Flash",
+        "gemini-pro": "Gemini 2.5 Pro",
+        "llama": "LLaMA 2 70B"
+    }
+
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"💬 <b>Чат с {model_names.get(model)}</b>\n\n"
+             f"✅ Модель выбрана!\n\n"
+             f"Теперь просто отправьте мне сообщение для начала беседы.\n\n"
+             f"Используйте команду /stop для завершения чата.",
+        parse_mode="HTML"
+    )
 
 
+# ===== TRANSLATION CALLBACKS =====
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('translate_'))
+def translate_lang_callback(call):
+    """Translation language selection (New 2025)"""
+    user_id = call.from_user.id
+    bot.answer_callback_query(call.id)
+
+    target_lang = call.data.replace('translate_', '')
+    text = state_manager.get_data(user_id, "text_to_translate")
+
+    if not text:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text="❌ Текст для перевода не найден. Попробуйте снова."
+        )
+        state_manager.clear_state(user_id)
+        return
+
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text="🌐 Перевожу...",
+        parse_mode="HTML"
+    )
+
+    # Translate
+    from tasks.tasks import translate_text_task
+    task = translate_text_task.delay(text, target_lang)
+
+    try:
+        result = task.get(timeout=60)
+
+        if "error" in result:
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"❌ Ошибка: {result['error']}"
+            )
+        else:
+            # Truncate if too long
+            translated = result['translated_text']
+            if len(translated) > 4000:
+                translated = translated[:4000] + "..."
+
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"✅ <b>Перевод:</b>\n\n{translated}",
+                parse_mode="HTML"
+            )
+    except Exception as e:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"❌ Ошибка перевода: {str(e)}"
+        )
+
+    state_manager.clear_state(user_id)
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('img_'))
@@ -825,6 +1543,7 @@ def image_provider_callback(call):
 
     # Map callback data to provider names
     provider_map = {
+        "img_nano_banana": "nano_banana",
         "img_dalle": "dalle",
         "img_sdxl": "sdxl",
         "img_flux_schnell": "flux_schnell",
@@ -843,6 +1562,12 @@ def image_provider_callback(call):
 
     # Model descriptions
     model_info = {
+        "nano_banana": {
+            "name": "Nano Banana (Gemini 2.5 Flash Image)",
+            "description": "Новейшая модель от Google",
+            "features": "• Превосходное понимание промптов\n• Высокая детализация\n• Отличная работа с текстом и логотипами",
+            "time": "20-40 секунд"
+        },
         "dalle": {
             "name": "DALL-E 3",
             "description": "Премиум модель от OpenAI",
@@ -871,92 +1596,266 @@ def image_provider_callback(call):
 
     info = model_info.get(provider, model_info["sdxl"])
 
-    processing_msg = bot.send_message(
-        call.message.chat.id,
-        f"🎨 <b>Генерирую с {info['name']}</b>\n\n"
+    # Edit the original message instead of sending new one
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"🎨 <b>Генерирую с {info['name']}</b>\n\n"
         f"📝 {info['description']}\n\n"
         f"<b>Особенности:</b>\n{info['features']}\n\n"
         f"⏱ Время: {info['time']}\n\n"
         f"🔄 Генерация началась...",
-        reply_markup=main_menu_keyboard()
+        parse_mode="HTML"
     )
 
     task = generate_image_task.delay(prompt, provider)
     state_manager.set_task_id(user_id, task.id)
 
-    check_task_result(user_id, task.id, processing_msg.message_id, "generate_image")
+    check_task_result(user_id, task.id, call.message.message_id, "generate_image")
 
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith('wm_'))
-def watermark_callback(call):
-    """Watermark action callbacks"""
+@bot.callback_query_handler(func=lambda c: c.data.startswith('tts_category_'))
+def tts_category_callback(call):
+    """TTS category selection callback (New 2025)"""
     user_id = call.from_user.id
     bot.answer_callback_query(call.id)
 
-    if call.data == "wm_add":
-        state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_WM"])
-        bot.send_message(
-            call.message.chat.id,
-            "💧 <b>Добавить водяной знак</b>\n\n"
-            "Отправьте мне изображение:",
-            reply_markup=cancel_keyboard()
+    category = call.data.replace('tts_category_', '')
+
+    # Show voices for selected category
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    if category == "male":
+        keyboard.add(
+            # Echo variants
+            types.InlineKeyboardButton("Echo Обычный", callback_data="tts_voice_echo_normal"),
+            types.InlineKeyboardButton("Echo Быстрый", callback_data="tts_voice_echo_fast"),
+            types.InlineKeyboardButton("Echo Медленный", callback_data="tts_voice_echo_slow"),
+            # Onyx variants
+            types.InlineKeyboardButton("Onyx Обычный", callback_data="tts_voice_onyx_normal"),
+            types.InlineKeyboardButton("Onyx Быстрый", callback_data="tts_voice_onyx_fast"),
+            types.InlineKeyboardButton("Onyx Медленный", callback_data="tts_voice_onyx_slow"),
+            # Fable variants
+            types.InlineKeyboardButton("Fable Обычный", callback_data="tts_voice_fable_normal"),
+            types.InlineKeyboardButton("Fable Медленный", callback_data="tts_voice_fable_slow")
         )
+        text = "👨 <b>Мужские голоса</b>\n\nВыберите голос:"
 
-    elif call.data == "wm_remove":
-        state_manager.set_state(user_id, STATES["WAITING_IMAGE_FOR_WM_REMOVE"])
-        bot.send_message(
-            call.message.chat.id,
-            "💧 <b>Удалить водяной знак</b>\n\n"
-            "Отправьте мне изображение с водяным знаком:\n\n"
-            "⚡ <b>Используется AI-инпейнтинг для удаления водяных знаков</b>",
-            reply_markup=cancel_keyboard()
+    elif category == "female":
+        keyboard.add(
+            # Nova variants
+            types.InlineKeyboardButton("Nova Обычная", callback_data="tts_voice_nova_normal"),
+            types.InlineKeyboardButton("Nova Быстрая", callback_data="tts_voice_nova_fast"),
+            types.InlineKeyboardButton("Nova Медленная", callback_data="tts_voice_nova_slow"),
+            # Shimmer variants
+            types.InlineKeyboardButton("Shimmer Обычная", callback_data="tts_voice_shimmer_normal"),
+            types.InlineKeyboardButton("Shimmer Быстрая", callback_data="tts_voice_shimmer_fast"),
+            types.InlineKeyboardButton("Shimmer Медленная", callback_data="tts_voice_shimmer_slow"),
+            # Alloy female variants
+            types.InlineKeyboardButton("Alloy Обычная", callback_data="tts_voice_alloy_f_normal"),
+            types.InlineKeyboardButton("Alloy Быстрая", callback_data="tts_voice_alloy_f_fast")
         )
+        text = "👩 <b>Женские голоса</b>\n\nВыберите голос:"
+
+    else:  # neutral
+        keyboard.add(
+            types.InlineKeyboardButton("Alloy Стандартный", callback_data="tts_voice_alloy_normal"),
+            types.InlineKeyboardButton("Alloy Быстрый", callback_data="tts_voice_alloy_fast"),
+            types.InlineKeyboardButton("Alloy Медленный", callback_data="tts_voice_alloy_slow"),
+            types.InlineKeyboardButton("Alloy Очень медленный", callback_data="tts_voice_alloy_vslow")
+        )
+        text = "🎭 <b>Нейтральные голоса</b>\n\nВыберите голос:"
+
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=text,
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
 
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith('tts_'))
-def tts_voice_callback(call):
-    """TTS voice selection callback"""
+@bot.callback_query_handler(func=lambda c: c.data.startswith('tts_voice_'))
+def tts_voice_final_callback(call):
+    """TTS voice final selection callback (New 2025 with 20 voices)"""
     user_id = call.from_user.id
     bot.answer_callback_query(call.id)
 
-    # Voice mapping
-    voice_map = {
-        "tts_male1": "male1",
-        "tts_male2": "male2",
-        "tts_female1": "female1",
-        "tts_female2": "female2",
-        "tts_neutral": "neutral"
+    voice_data = call.data.replace('tts_voice_', '')
+
+    # Parse voice and speed
+    # Format: voice_speed (e.g., "echo_fast", "nova_normal")
+    parts = voice_data.rsplit('_', 1)
+    if len(parts) == 2:
+        voice_name, speed_type = parts
+    else:
+        voice_name = voice_data
+        speed_type = "normal"
+
+    # Clean up voice name (remove f_ prefix for alloy female)
+    voice_name = voice_name.replace('_f', '')
+
+    # Store voice data
+    state_manager.set_data(user_id, "tts_voice", voice_name)
+    state_manager.set_data(user_id, "tts_speed", speed_type)
+    state_manager.set_state(user_id, STATES["WAITING_ADVANCED_TTS_TEXT"])
+
+    # Speed mapping
+    speed_names = {
+        "normal": "Обычный темп",
+        "fast": "Быстрый темп",
+        "slow": "Медленный темп",
+        "vslow": "Очень медленный"
     }
 
-    voice = voice_map.get(call.data, "neutral")
-    text = state_manager.get_data(user_id, "tts_text")
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"✅ <b>Голос выбран:</b> {voice_name.capitalize()}\n"
+             f"⚡ <b>Темп:</b> {speed_names.get(speed_type, 'Обычный')}\n\n"
+             f"Теперь отправьте текст для озвучки (до 4096 символов).",
+        parse_mode="HTML"
+    )
 
-    if not text:
-        bot.send_message(call.message.chat.id, "❌ Текст не найден. Пожалуйста, начните сначала.")
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('video_'))
+def video_model_callback(call):
+    """Text-to-video model selection callback"""
+    user_id = call.from_user.id
+    bot.answer_callback_query(call.id)
+
+    # Map callback data to model names
+    model_map = {
+        "video_sora2": "sora2",
+        "video_veo3": "veo3",
+        "video_minimax": "minimax",
+        "video_ltx": "ltx",
+        "video_animate_diff": "animate_diff"
+    }
+
+    model = model_map.get(call.data)
+    if not model:
+        bot.send_message(call.message.chat.id, "❌ Неверная модель")
         return
 
-    voice_names = {
-        "male1": "Мужской голос 1",
-        "male2": "Мужской голос 2",
-        "female1": "Женский голос 1",
-        "female2": "Женский голос 2",
-        "neutral": "Нейтральный голос"
+    prompt = state_manager.get_data(user_id, "video_prompt")
+    if not prompt:
+        bot.send_message(call.message.chat.id, "❌ Промпт не найден. Пожалуйста, попробуйте снова.")
+        return
+
+    # Model descriptions (Updated 2025)
+    model_info = {
+        "sora2": {
+            "name": "OpenAI Sora 2",
+            "description": "Флагманская модель со звуком, высочайшее качество",
+            "time": "2-5 минут"
+        },
+        "veo3": {
+            "name": "Google Veo 3.1",
+            "description": "Высокая точность, контекстно-зависимое аудио",
+            "time": "2-4 минуты"
+        },
+        "minimax": {
+            "name": "Minimax Video-01",
+            "description": "Высокое качество, реалистичное движение, 720p",
+            "time": "1-3 минуты"
+        },
+        "ltx": {
+            "name": "LTX-Video",
+            "description": "Быстрая DiT-модель, 24 FPS при 768x512",
+            "time": "30-90 секунд"
+        },
+        "animate_diff": {
+            "name": "AnimateDiff",
+            "description": "Классическая модель, надежная (fallback)",
+            "time": "1-2 минуты"
+        }
     }
 
-    processing_msg = bot.send_message(
-        call.message.chat.id,
-        f"🎤 Озвучиваю текст ({voice_names.get(voice)})...\n\n"
-        "Это может занять около минуты.",
-        reply_markup=main_menu_keyboard()
+    info = model_info.get(model, model_info["sora2"])
+
+    # Edit message
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"🎬 <b>Генерирую с {info['name']}</b>\n\n"
+        f"📝 {info['description']}\n\n"
+        f"⏱ Время: {info['time']}\n\n"
+        f"🔄 Генерация началась...",
+        parse_mode="HTML"
     )
 
     # Import task
-    from tasks.tasks import text_to_speech_task
+    from tasks.tasks import generate_video_task
 
-    task = text_to_speech_task.delay(text, voice)
+    task = generate_video_task.delay(prompt, model)
     state_manager.set_task_id(user_id, task.id)
 
-    check_task_result(user_id, task.id, processing_msg.message_id, "tts")
+    check_task_result(user_id, task.id, call.message.message_id, "generate_video")
+
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith('i2v_'))
+def image_to_video_model_callback(call):
+    """Image-to-video model selection callback"""
+    user_id = call.from_user.id
+    bot.answer_callback_query(call.id)
+
+    # Map callback data to model names (Updated 2025)
+    model_map = {
+        "i2v_svd": "svd",
+        "i2v_svd_xt": "svd_xt",
+        "i2v_svd_enhanced": "svd_enhanced"
+    }
+
+    model = model_map.get(call.data)
+    if not model:
+        bot.send_message(call.message.chat.id, "❌ Неверная модель")
+        return
+
+    image_b64 = state_manager.get_data(user_id, "image_for_video")
+    if not image_b64:
+        bot.send_message(call.message.chat.id, "❌ Изображение не найдено. Пожалуйста, попробуйте снова.")
+        return
+
+    # Model descriptions (Updated 2025)
+    model_info = {
+        "svd": {
+            "name": "Stable Video Diffusion",
+            "description": "Базовая версия, 14 кадров, 6 FPS",
+            "time": "1-2 минуты"
+        },
+        "svd_xt": {
+            "name": "SVD-XT",
+            "description": "Расширенная версия, 25 кадров, 10 FPS",
+            "time": "2-3 минуты"
+        },
+        "svd_enhanced": {
+            "name": "SVD Enhanced",
+            "description": "Улучшенное движение, 14 кадров, 8 FPS",
+            "time": "1-2 минуты"
+        }
+    }
+
+    info = model_info.get(model, model_info["svd"])
+
+    # Edit message
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=f"🖼️ <b>Создаю видео с {info['name']}</b>\n\n"
+        f"📝 {info['description']}\n\n"
+        f"⏱ Время: {info['time']}\n\n"
+        f"🔄 Генерация началась...",
+        parse_mode="HTML"
+    )
+
+    # Import task
+    from tasks.tasks import image_to_video_task
+
+    task = image_to_video_task.delay(image_b64, model)
+    state_manager.set_task_id(user_id, task.id)
+
+    check_task_result(user_id, task.id, call.message.message_id, "image_to_video")
 
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith('select_idea_'))
@@ -1086,6 +1985,15 @@ def check_task_result(user_id: int, task_id: str, msg_id: int, task_type: str):
 
                 elif task_type == "remove_watermark":
                     handle_watermark_removed_result(user_id, result)
+
+                elif task_type == "remove_background":
+                    handle_background_removed_result(user_id, result)
+
+                elif task_type == "generate_video":
+                    handle_video_result(user_id, result)
+
+                elif task_type == "image_to_video":
+                    handle_video_result(user_id, result)
 
                 return
 
@@ -1350,6 +2258,32 @@ def handle_watermark_removed_result(user_id: int, result: dict):
     img_bytes = base64.b64decode(img_b64)
 
     bot.send_photo(user_id, photo=img_bytes, caption="✅ Водяной знак удален!")
+
+
+def handle_background_removed_result(user_id: int, result: dict):
+    """Handle background removal result"""
+    img_b64 = result.get("image")
+
+    if not img_b64:
+        bot.send_message(user_id, "❌ Не удалось удалить фон")
+        return
+
+    img_bytes = base64.b64decode(img_b64)
+
+    bot.send_photo(user_id, photo=img_bytes, caption="✅ Фон успешно удален! 🗑✨")
+
+
+def handle_video_result(user_id: int, result: dict):
+    """Handle video generation result"""
+    video_b64 = result.get("video")
+
+    if not video_b64:
+        bot.send_message(user_id, "❌ Не удалось создать видео")
+        return
+
+    video_bytes = base64.b64decode(video_b64)
+
+    bot.send_video(user_id, video=video_bytes, caption="✅ Ваше видео готово! 🎬✨")
 
 
 # ===== MAIN =====
